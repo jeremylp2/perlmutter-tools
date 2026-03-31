@@ -1,5 +1,15 @@
 # Global Claude Code Notes
 
+## ABSOLUTE RULE: All guides, skills, and scripts go in the stow repo
+
+**Never write `.md` files, skills (`SKILL.md`), or scripts (`.sh`, `.R`, `.py`) directly to `~/.claude/`.** Those files are symlinks managed by GNU Stow. The source of truth is `~/gh/perlmutter-tools/`.
+
+- **Guides and CLAUDE.md**: Write to `~/gh/perlmutter-tools/claude-config/.claude/`
+- **Skills**: Write to `~/gh/perlmutter-tools/claude-config/.claude/skills/<skill-name>/SKILL.md`
+- **After creating/editing**: Run `cd ~/gh/perlmutter-tools && ~/local/bin/stow -t ~ claude-config` to update symlinks
+- **After Claude creates a new file in `~/.claude/` that should be in the repo**: Run `cd ~/gh/perlmutter-tools && ~/local/bin/stow --adopt -t ~ claude-config` to pull it into the repo
+- A PreToolUse hook enforces this — writes to `~/.claude/*.md`, `~/.claude/skills/`, etc. will be blocked
+
 ## After modifying njp_content: verify on the live page
 
 After any change to `njp_content` or `njp_content_dev`, always fetch the live page to verify the result looks correct before reporting done:
