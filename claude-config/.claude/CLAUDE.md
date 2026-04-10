@@ -81,6 +81,13 @@ After any change to `njp_content` or `njp_content_dev`, always fetch the live pa
 - `nohup` alone is NOT sufficient — use screen/tmux.
 - This applies to ALL long-running operations: DB queries, file copies, pipeline submissions, builds — everything.
 
+**ABSOLUTE RULE: Never launch overlapping processes that do the same work.**
+- Before launching ANY process (background shell, screen session, or foreground command), check that no existing process is already doing the same work. Check: screen -ls, pgrep, and Claude Code's own task list.
+- If a previous attempt appears stuck or produced no output, INVESTIGATE before retrying. Check file sizes, wait for completion, check exit codes. Do not assume failure from empty output — it may be buffered I/O or a pipe filter swallowing results.
+- Never launch a second process that writes to the same files, databases, or collections as a running process. This causes data corruption.
+- If you must retry, explicitly kill/stop the previous attempt first and confirm it is dead.
+- One process, one job. Period.
+
 **Perlmutter has many login nodes — NEVER use `ps` or `pgrep` to check if a process is running.**
 - You may be on a different login node than the one running the process.
 - Always use log files and `squeue` to check pipeline status.
