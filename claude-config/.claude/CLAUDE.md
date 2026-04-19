@@ -48,9 +48,58 @@ After any change to `njp_content` or `njp_content_dev`, always fetch the live pa
 - "Only N records are affected" is never a justification for silent data loss. Scientific data integrity requires explicit decisions about every value.
 - When handling edge cases (ties, nulls, mixed types), always preserve the maximum information and document what was done.
 
+## ABSOLUTE RULE: Investigate — never assume — when anything dies, hangs, or misbehaves
+
+**When a process dies, hangs, produces no output, or behaves unexpectedly, STOP and investigate before retrying.** Never use "probably" to explain what happened in a deterministic system — that is an assumption, not a diagnosis.
+- Read the actual log. Check actual exit codes. Check file sizes/mtimes.
+- Check for the process on every possible login node (on Perlmutter there are many); finding nothing on one node does NOT mean the process is dead.
+- Check Claude Code's own task list for background tasks — task completion notifications indicate whether a background command finished.
+- Only after the actual cause is known, decide on the next action. Relaunching "just in case" is forbidden — it can produce duplicates (see overlapping-processes rule).
+- "Probably killed by timeout" / "probably crashed" / "probably done" are not acceptable explanations. Replace with: "I checked X and saw Y, which means Z."
+
+## ABSOLUTE RULE: Test long-running work on ONE example before running the full batch
+
+**Before launching any pipeline, data load, or long-running script, run it on a single item (one file, one proteome, one record, one row) and verify the output is correct.**
+- Time the single-item run to estimate total runtime.
+- Verify the single-item output against expectations — not just "the command completed" but "the result is what we expected and can be consumed by the next step."
+- Only after a small-scale success should you commit to the full run.
+- This applies every time you introduce a new code path: a new SQL query, a new library call, a new config format, a new subprocess invocation, a new transformation.
+- Committing ~hours of compute before a 30-second single-example test is reckless. Small tests fail cheaply; full-batch failures waste enormous time.
+
+## ABSOLUTE RULE: Check data integrity at every pipeline step
+
+**After every step that produces a data product (defline file, JSON file, MongoDB collection, table row), verify its integrity immediately before the next step runs.**
+- Expected number of items (and compare against authoritative source when possible).
+- Expected fields populated — not just "existence" or "nonzero count" but content completeness (e.g., defline strings actually present, not just PAC ids present).
+- Sample records match expectations (field ranges, cross-referential sanity).
+- Integrity checks should be part of the routine pipeline — not something added only when the user complains about bad data.
+- Whenever code that produces data is changed, rerun integrity checks — a fix in one place can silently break another.
+- "Mongoimport exit 0" / "json.load worked" / "file has nonzero bytes" are NOT integrity checks; they are weakest-possible existence checks.
+
+## ABSOLUTE RULE: Check for duplicate/overlapping processes BEFORE launching
+
+**Before launching any process — foreground, background, or screen session — check that no existing instance of the same work is already running.**
+- `screen -ls` on every potentially-relevant login node (Perlmutter has many — one node's listing is not authoritative).
+- `pgrep` / `ps` for the script/command name across login nodes.
+- Claude Code's own background task list (task completion notifications indicate a running task).
+- If ANY matching process is found, STOP. Do NOT launch another. Either wait for it to finish, or kill it first (with user permission per the destructive-action rule).
+- Running the same work twice is always wasteful and can corrupt data when both processes write to the same files/collections/tables.
+- When a process appears dead, verify across all nodes before concluding — see the investigate-never-assume rule.
+
+## ABSOLUTE RULE: Progress and error output MUST be unbuffered
+
+**Long-running scripts must emit progress and findings AS THEY HAPPEN, not at the end — otherwise a crash loses everything you've learned.**
+- Python: use `python3 -u`, or in the script `sys.stdout.reconfigure(line_buffering=True)` and the same for stderr. Do not rely on the default buffering.
+- Never pipe unbuffered output through `tail`, `head`, `less`, `cat | ...` or similar at the end of the pipeline — these buffer their stdin until EOF and defeat unbuffered output. Write directly to a log file instead.
+- Accumulating findings in a list for "print at the end of the run" is forbidden — if the process crashes, the list evaporates. Print each finding immediately with enough context to act on it. Lists are OK only for final summary totals.
+- Error streams (stderr) must ALSO be unbuffered — an error that surfaces only after the run completes is useless during debugging.
+- This applies especially to control/head-node scripts whose output is monitored live. (Intermediate pipeline scripts running inside JAWS/Cromwell/SLURM tasks typically have their output collected by the task runner; unbuffering is less critical there.)
+
 ## Perlmutter / Shifter
 
 **If the user asks you to do anything involving JAWS, read `~/.claude/jaws-guide.md` before proceeding.**
+
+**If the user asks you to do anything involving njp_content (info pages, restriction text, publications, recent genome releases, viewProjectSection), read `~/.claude/njp_content_guide.md` before proceeding.**
 
 **If the user asks you to do anything involving MongoDB, homolog databases, or connecting to mongo, read `~/.claude/mongo-guide.md` before proceeding.**
 
@@ -73,6 +122,12 @@ After any change to `njp_content` or `njp_content_dev`, always fetch the live pa
 - Verify ready: `shifterimg images | grep <short-digest>` — status must be READY
 
 **For interactive R/Python work, use `module load` and local package installs (`install.packages()` / `pip install --target`) — not Shifter containers.** Shifter/container instructions above apply only to WDL pipelines and Docker image builds.
+
+**ABSOLUTE RULE: Always ask before killing a long-running process or deleting data.**
+- Before running `screen -X quit`, `kill`, `pkill`, `scancel`, `DROP`, `TRUNCATE`, `DELETE FROM`, `rm -rf`, or any other action that stops an active process or destroys existing data, STOP and ask the user first.
+- "I can just restart it" is NOT a justification — the user may have reasons (in-flight progress, lock state, side effects, timing) that make the kill worse than waiting.
+- This applies even when the action seems obviously correct or reversible. The user decides, not you.
+- Exception: you may clean up processes YOU just launched that failed to start properly (e.g. an empty-output subprocess from 10 seconds ago). Anything the user is aware of or has been running >1 minute: ask.
 
 **ABSOLUTE RULE: Always run long-running processes fully detached. NOTHING may depend on a Claude Code session or SSH session remaining open.**
 - Write a self-contained shell script that logs all output to a file.
