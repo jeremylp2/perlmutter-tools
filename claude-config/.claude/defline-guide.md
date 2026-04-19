@@ -72,6 +72,23 @@ Observed causes during April 2026 session:
 
 `get_deflines.py` should ideally verify the written file (re-read gzip, count rows, compare to fetchall count) — not currently implemented.
 
+## Audit tool
+
+`audit_deflines_fast.py` (project-local on pscratch) compares each proteome's defline file to current PG state. Per-proteome query mirrors `pac_gene_view_callt`'s join structure exactly (transcript + scaffold joins) so counts match the canonical source.
+
+Earlier audit queries that skipped the transcript/scaffold joins produced false positives (flagged files STALE because they had fewer rows than PG's raw gene count — but those extra genes didn't have transcripts so they shouldn't be in the defline file).
+
+When running an audit: always include the transcript/scaffold joins. Counting raw gene rows from feature + pac_genome_worklist is not equivalent to counting rows that would be in the defline file.
+
+## Regen + re-audit workflow
+
+1. Identify stale/missing proteomes via audit
+2. Regenerate: `python3 get_deflines.py --prots <ids> --force`
+3. Re-audit to confirm all flagged proteomes now show OK
+4. If any CRITICAL remains (PG has 0 deflines), that's an upstream data problem — cannot be fixed by regen; skip those proteomes
+
+Typical timing: 10-20 sec per proteome for regen (pac_gene_view_callt is slow); audit ~1-10 sec per proteome with the correct fast query.
+
 ## Impact of stale deflines on homologs
 
 When a partner's defline file is stale, `to_json.py` will write empty `hitDefline` for records pointing to that partner. This is silent — no error, no warning.

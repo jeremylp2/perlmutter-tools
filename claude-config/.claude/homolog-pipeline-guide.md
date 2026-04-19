@@ -136,6 +136,49 @@ Both directions exist: `homologs_A_B` and `homologs_B_A` — one per JAWS run th
 
 **"hitDefline is empty for many records"**: the partner's defline file is stale or incomplete. Run `/homolog-audit` to find stale proteomes. Regenerate with `python3 pipeline/get_deflines.py --prots X --force`.
 
-**"Cron stuck held"**: scrontab job in SLURM may be in held state (`squeue -u $USER -p cron` shows `(user env retrieval failed requeued held)`). Release with `scontrol release <jobid>`.
+**"Cron stuck held"**: scrontab job in SLURM may be in held state (`squeue -u $USER -p cron` shows `(user env retrieval failed requeued held)`).
+- **DO NOT** try `scontrol release <jobid>` — fails with `Cannot modify scrontab jobs through scontrol`.
+- **DO NOT** try `scancel <jobid>` alone — fails with `Cannot cancel scrontab jobs without --cron flag`.
+- `scancel --cron <jobid>` works but DISABLES the scrontab entry (`#DISABLED:` prefix) — you'd have to `scrontab -e` to uncomment it afterward.
+- **Recommended fix**: reinstall the scrontab, which creates fresh jobs in normal PENDING state:
+  ```bash
+  scrontab -l > /pscratch/sd/p/phillips/scrontab_new.txt
+  # (if any lines start with #DISABLED:, remove that prefix)
+  scrontab /pscratch/sd/p/phillips/scrontab_new.txt
+  # All cron jobs get new IDs in reason=BeginTime (not held)
+  ```
+- After reinstall, first scheduled run tests whether env retrieval works now. If it still fails (re-enters held), the cause is deterministic — file a ticket with NERSC to check slurmctld logs.
+
+## Env setup for wrappers / subprocesses
+
+The pipeline uses two separate environments for different tools:
+- **chado conda env** (`conda activate chado` after `module load python`) — perl with DBD::mysql, python with pymongo/mysql.connector/psycopg2. Used for: FASTA extraction (`getFastaFromPAC.pl`), PG queries, mongo loads.
+- **jaws-prod venv** (`source ~/jaws-prod.sh`) — the `jaws` command (submit, status, history, etc.)
+
+**These two envs CANNOT coexist in one shell**:
+- Sourcing jaws-prod AFTER activating chado overrides perl (→ system perl, no DBD::mysql) and python (→ jaws-prod python, no pymongo).
+- Chado env contains a STALE `jaws` binary at `/global/cfs/cdirs/jgisftwr/plant/zome/conda/envs/chado/bin/jaws` — **DO NOT** rely on it.
+
+**Canonical wrapper for homolog pipeline** (runs `homolog_cron.py` / `prepare_jaws.py` / `collect_results.py`, all of which call `jaws` via subprocess):
+```bash
+#!/bin/bash
+source ~/jaws-prod.sh          # makes `jaws` command available; sets jaws-prod env vars
+module load python/3.11-24.1.0  # restores user's python (with mysql.connector, pymongo via ~/.local)
+cd /path/to/workdir
+python3 <script>
+```
+
+**Perl calls via subprocess from python** (for `getFastaFromPAC.pl` etc.) must wrap their own subshell to activate chado:
+```python
+# See prepare_jaws.py::ensure_fasta (commit a2d4da58)
+import shlex
+perl_cmd = (
+    "module load python/3.11-24.1.0 && "
+    "conda activate chado && "
+    f"perl {shlex.quote(extractor)} ..."
+)
+subprocess.run(["bash", "-lc", perl_cmd])
+```
+The `bash -lc` ensures `.bashrc` conda init is sourced so `conda activate` works.
 
 **"pipeline_lock held"**: another instance (manual run or cron) is already running. Check with `SELECT GET_LOCK('homolog_pipeline', 0)` in deploy_config_metadata — returns 0 if held. Check who holds it via `performance_schema.metadata_locks` or just wait for it to complete.
