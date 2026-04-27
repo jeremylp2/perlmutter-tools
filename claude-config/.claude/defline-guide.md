@@ -6,8 +6,10 @@ Deflines are the short human-readable descriptions of proteins (e.g., "CATION/H(
 
 - **Authoritative source**: PostgreSQL function `json_export.pac_gene_view_callt(proteome_id, rank)` on plant-db-7
 - **Populated by**: `pipeline/get_deflines.py`
-- **Written to**: `/pscratch/sd/p/phillips/inparanoid/defline/output_files/output_{pid}.tsv.gz`
+- **Canonical location**: defined ONCE as `DEFAULT_DEFLINE_DIR` in `pipeline/config.py`. All scripts (`get_deflines.py`, `prepare_jaws.py`, `to_json.py`, `run_pipeline.py`) import from there. Currently `/pscratch/sd/p/phillips/inparanoid/defline/output_files/`. To redeploy on another host, edit that one constant.
 - **Consumed by**: `pipeline/to_json.py` (inside the homolog-pipeline Docker image, via the deflines tarball staged by JAWS)
+
+> Historical pitfall: before the path-consolidation change, `get_deflines.py` and `prepare_jaws.py` defaulted to a *relative* `defline/output_files`, resolved against cwd or `__file__`. Cron (cwd in git checkout) and manual runs (cwd on pscratch) silently used different caches. Never run pipeline scripts with cwd inside the git checkout — though now that paths are absolute, this no longer corrupts anything.
 
 ## Two defline columns
 

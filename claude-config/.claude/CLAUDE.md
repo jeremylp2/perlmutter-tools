@@ -48,6 +48,16 @@ After any change to `njp_content` or `njp_content_dev`, always fetch the live pa
 - "Only N records are affected" is never a justification for silent data loss. Scientific data integrity requires explicit decisions about every value.
 - When handling edge cases (ties, nulls, mixed types), always preserve the maximum information and document what was done.
 
+## ABSOLUTE RULE: Empirical data and facts only — never assume, never guess
+
+**Never make assumptions. Always investigate. Every claim about the state of a file, process, database, run, config, history, or any other determinable thing must be backed by empirical data gathered right now — not memory, not intuition, not "it was like that last time."**
+- Forbidden words and phrases when discussing things that can be determined factually: "probably", "should be", "must be", "likely", "I think", "I believe", "presumably", "seems like", "appears to be", "I'd guess", "my guess is".
+- Before stating any fact about the system: run the command, read the file, query the DB. State what you actually observed, then draw the conclusion.
+- Before modifying anything (memory, code, config, data) based on a belief: VERIFY the belief is true first. If you catch yourself about to edit something because "I think X is outdated", stop — check X first.
+- If data is incomplete or a lookup returns fewer results than expected (e.g. `r[0]` from an API), check the ordering and scope before drawing conclusions. One result is not "the only result."
+- When you cannot determine something factually (rare): say so explicitly — "I don't know and cannot determine it from here" — rather than guess.
+- This rule applies to every statement in every response, not just failure diagnosis or destructive actions. Hedged language in a routine status report is just as forbidden as in a postmortem.
+
 ## ABSOLUTE RULE: Investigate — never assume — when anything dies, hangs, or misbehaves
 
 **When a process dies, hangs, produces no output, or behaves unexpectedly, STOP and investigate before retrying.** Never use "probably" to explain what happened in a deterministic system — that is an assumption, not a diagnosis.

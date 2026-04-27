@@ -37,7 +37,7 @@ MongoDB `diamond_homologs_v14` (host plant-db-4.jgi.lbl.gov)
 |------|----------|
 | `~/git/compgen/data_wrangling/MONGOio/pipeline/` | Pipeline source (git) |
 | `/pscratch/sd/p/phillips/inparanoid/` | Working dir (has local copies of scripts during dev) |
-| `/pscratch/sd/p/phillips/inparanoid/defline/output_files/` | Defline TSV.gz files |
+| `/pscratch/sd/p/phillips/inparanoid/defline/output_files/` | Defline TSV.gz files (canonical — value of `config.DEFAULT_DEFLINE_DIR`) |
 | `/pscratch/sd/p/phillips/inparanoid/homologs/output_json/` | mongoloader JSON files (after extract) |
 | `/global/cfs/cdirs/plantbox/homology/inparanoid_homologs/all_db/{pid}/` | Persistent inparanoid table files |
 | `/global/cfs/cdirs/plantbox/phytzm-jaws/phillips/{jaws_run_id}/{cromwell_id}/` | JAWS output dirs (per submission) |
@@ -148,6 +148,10 @@ Both directions exist: `homologs_A_B` and `homologs_B_A` — one per JAWS run th
   # All cron jobs get new IDs in reason=BeginTime (not held)
   ```
 - After reinstall, first scheduled run tests whether env retrieval works now. If it still fails (re-enters held), the cause is deterministic — file a ticket with NERSC to check slurmctld logs.
+
+## Filesystem layout — single source of truth
+
+`pipeline/config.py` defines `DEFAULT_WORK_DIR` and `DEFAULT_DEFLINE_DIR` as plain constants. Every other pipeline script imports them. To redeploy on another host, edit those two lines only — do not introduce per-script defaults or `__file__`-derived paths.
 
 ## Env setup for wrappers / subprocesses
 
