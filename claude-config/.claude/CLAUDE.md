@@ -139,18 +139,34 @@ After any change to `njp_content` or `njp_content_dev`, always fetch the live pa
 - This applies even when the action seems obviously correct or reversible. The user decides, not you.
 - Exception: you may clean up processes YOU just launched that failed to start properly (e.g. an empty-output subprocess from 10 seconds ago). Anything the user is aware of or has been running >1 minute: ask.
 
-**ABSOLUTE RULE: Always run long-running processes fully detached. NOTHING may depend on a Claude Code session or SSH session remaining open.**
-- Write a self-contained shell script that logs all output to a file.
-- Launch it in a `screen` or `tmux` session so it survives logout.
-- Example: `screen -dmS jobname bash /path/to/script.sh`
+**ABSOLUTE RULE: Always run anything that touches shared state in `screen` or `tmux`. Foreground is forbidden. Every launch MUST register where it's running.**
+- This applies to ANY operation that interacts with a database, MongoDB, files in shared paths, or any other shared resource — regardless of expected duration. "It'll only take a minute" is NOT a valid exception.
+- Foreground feels safer because you see output, but the moment the Claude Code session, the SSH connection, or the user's terminal ends, the work dies — possibly leaving partial writes, inconsistent state, or half-loaded collections that look complete but aren't.
+- Pattern: write a self-contained shell script that logs all output to a file under `$SCRATCH`, then `screen -dmS jobname bash /path/to/script.sh`.
+- **Recording the launch node is MANDATORY**, not optional. Every wrapper script's FIRST lines (before any other work) MUST be:
+  ```
+  LOG=/path/to/job.log   # absolute path under $SCRATCH
+  echo "Running on $(hostname) at $(date) PID=$$ SCRIPT=$0" > "$LOG"
+  ```
+  This log line is the system of record for "where is this job running." Without it, the job is unfindable across login nodes and the pre-launch overlap check (next rule) cannot work.
+- After launching a screen, always wait 3-5 seconds, then read the log file and verify the "Running on …" line is present. If it's not, the launch failed — debug; do NOT relaunch blindly.
 - `nohup` alone is NOT sufficient — use screen/tmux.
-- This applies to ALL long-running operations: DB queries, file copies, pipeline submissions, builds — everything.
+- Read-only audits (no writes anywhere) are the only exception; they may run in foreground if they take <30s and cannot leave inconsistent state.
 
-**ABSOLUTE RULE: Never launch overlapping processes that do the same work.**
-- Before launching ANY process (background shell, screen session, or foreground command), check that no existing process is already doing the same work. Check: screen -ls, pgrep, and Claude Code's own task list.
-- If a previous attempt appears stuck or produced no output, INVESTIGATE before retrying. Check file sizes, wait for completion, check exit codes. Do not assume failure from empty output — it may be buffered I/O or a pipe filter swallowing results.
-- Never launch a second process that writes to the same files, databases, or collections as a running process. This causes data corruption.
-- If you must retry, explicitly kill/stop the previous attempt first and confirm it is dead.
+**ABSOLUTE RULE: Pre-launch overlap check is ALWAYS multi-node, ALWAYS based on recorded job locations.**
+- Before launching ANY process (background shell, screen session, or foreground command), VERIFY that no existing process is already doing the same work, anywhere across all login nodes.
+- **Single-node `pgrep`/`screen -ls` is INSUFFICIENT** because Perlmutter has many login nodes and a screen session on a different node is invisible from here.
+- **The check is driven by the recorded job locations, not by a blanket scan.** Required procedure:
+  1. Identify all log files for jobs of the same kind (`ls /path/to/*<job>.log`).
+  2. For each, grep `^Running on (login\d+)` to extract the recorded hostname.
+  3. ssh ONLY to those recorded nodes and run `screen -ls | grep <screen-name>; pgrep -f <script>`.
+  4. If any match, the job is still active — STOP, do not launch.
+- A blanket `for h in login01..login40; ssh $h ...` loop is a forensic fallback (e.g., when no log exists), NOT a routine pre-launch check. Routine checks must use the recorded locations.
+- For long-running pipeline work, a **cross-node advisory lock** (MySQL `GET_LOCK`, the project's `pipeline_lock` context manager) is preferred over log-based checks — it's atomic and self-cleaning.
+- If a previous attempt appears stuck or produced no output, INVESTIGATE before retrying. Check the recorded log file, the recorded host's screen listing, file sizes, exit codes. Do not assume failure from empty output.
+- **NEVER conflate output from one screen-related command with another.** If `screen -X -S A quit` says "No screen session found", that is about screen `A`, NOT about a different screen `B` you launched moments ago. Verify `B` explicitly via the log file's "Running on …" line + an ssh to that host's `screen -ls | grep B`.
+- Never launch a second process that writes to the same files, databases, or collections as a running process. This causes data corruption that often looks like duplicates (e.g. 2× expected row count).
+- If you must retry, explicitly kill/stop the previous attempt first and confirm it is dead via positive evidence (the recorded host's screen listing no longer shows it AND its log shows a clean exit).
 - One process, one job. Period.
 
 **Perlmutter has many login nodes — NEVER use `ps` or `pgrep` to check if a process is running.**
