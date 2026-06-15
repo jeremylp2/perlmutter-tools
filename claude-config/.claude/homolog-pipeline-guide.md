@@ -19,9 +19,9 @@ FASTA files (~/inparanoid/{pid}.fa)
   │
   │  JAWS workflow: diamond_homologs.wdl
   │  - run_inparanoid (scatter over all pairs)
+  │  - compute_multiplicity  → multiplicity_{pid}.tsv (orthoType per gene pair)
   │  - run_diamond   (scatter over all pairs)
-  │  - compute_multiplicity
-  │  - generate_json (to_json.py inside the homolog-pipeline Docker image)
+  │  - generate_json (to_json.py + --multiplicity-file, in the homolog-pipeline image)
   ▼
 JSON tarball on CFS (call-generate_json/execution/json_{pid}.tar.gz)
   │
@@ -30,6 +30,30 @@ JSON tarball on CFS (call-generate_json/execution/json_{pid}.tar.gz)
 MongoDB `diamond_homologs_v14` (host plant-db-4.jgi.lbl.gov)
   Collections named `homologs_{pid1}_{pid2}` (pid1 = home/query, pid2 = partner/hit)
 ```
+
+## Current docker image (orthoType-enabled, 2026-06)
+`docker.io/jlphillipslbl/homolog-pipeline@sha256:119ec72b2301f66ff7366bbb9f486f10910942961ffae61823338f7b65f39c28`
+- Pinned in `diamond_homologs.wdl` generate_json runtime. Old pre-orthoType image was `d35a2349...`.
+- Rebuild procedure: `podman-perlmutter-guide.md`. Build dir `pipeline/wdl/docker/homolog-pipeline/` needs `to_json.py` + `get_multiplicity_wdl.py` copied in.
+
+## Single source of truth for paths
+`config.py` defines `DEFAULT_WORK_DIR` and `DEFAULT_DEFLINE_DIR` as plain constants;
+ALL scripts import them. Never reintroduce relative `defline/output_files` or
+`__file__`-based path computation (that caused cron vs manual runs to use divergent
+defline caches). To redeploy on another host, edit those two lines only.
+
+## orthoType (CRITICAL)
+Each record carries `orthoType` (1-1/1-M/M-1/M-M, "" for non-orthologs) from the
+multiplicity TSV. It was silently dropped in the JAWS migration (commit 12224cea)
+and restored 2026-06. Full detail + backfill procedure: `homolog-orthotype-guide.md`.
+
+## MongoDB load — format detection + retries (load_mongo.py)
+- Detects per file whether it is a JSON array (`[`) or NDJSON (`{`) and passes
+  `--jsonArray` only for arrays. (Pre-JAWS files were NDJSON; JAWS writes arrays.)
+- Retries transient mongoimport failures (connection timeouts) up to 4× with backoff,
+  re-dropping/recreating each attempt.
+- `workers=3` (≤ the hard limit of 5 mongo workers total — see
+  `feedback_mongo_server_protection`). Do NOT raise it.
 
 ## Key file locations
 
@@ -135,6 +159,16 @@ Both directions exist: `homologs_A_B` and `homologs_B_A` — one per JAWS run th
 **"API returns 0 docs for proteome X"**: check `homologs_X_*` collection exists and `queryIdentifier` in a sample doc actually belongs to X. If not, the data has the query/hit swap bug (historical bug, fixed in commit f65e2670 — see lessons.md Bug 17).
 
 **"hitDefline is empty for many records"**: the partner's defline file is stale or incomplete. Run `/homolog-audit` to find stale proteomes. Regenerate with `python3 pipeline/get_deflines.py --prots X --force`.
+
+**"records missing orthoType"**: data loaded by the JAWS pipeline before 2026-06 lacks orthoType (regression, see `homolog-orthotype-guide.md`). Future runs (image 119ec72b) include it. Backfill existing data with `backfill_orthotype.py` / `/homolog-orthotype-backfill`.
+
+**"mongoimport: found no opening bracket '['"**: the file is NDJSON but `--jsonArray` was used. Current load_mongo auto-detects; if you see this, an old NDJSON file is present — load_mongo (commit 81985993) handles it, or delete stale NDJSON.
+
+**"proteome status=ERR but data looks fine"**: historically a mongo-load failure flipped blast/inp=ERR even though compute succeeded (fixed in e4ee794d/cfff6452). Verify actual data (JAWS run succeeded? collections populated?) before trusting the status; correct the status to match reality.
+
+**"proteome status=DONE but zero data / never ran"**: falsely-DONE (see Bug 26). Cron skips it forever (needs blast=0). Reset to PEND and submit fresh. Guard: check `diamondparanoid_loc` rows / forward collections exist for any released-DONE proteome.
+
+**"cron submits nothing / prepare_jaws.py failed (rc=1) Another instance holds lock"**: the nested-lock deadlock (Bug 24) — homolog_cron holds the lock then prepare_jaws re-acquires. Fixed by `--no-lock` (commit 9889b394); ensure homolog_cron passes it.
 
 **"Cron stuck held"**: scrontab job in SLURM may be in held state (`squeue -u $USER -p cron` shows `(user env retrieval failed requeued held)`).
 - **DO NOT** try `scontrol release <jobid>` — fails with `Cannot modify scrontab jobs through scontrol`.
