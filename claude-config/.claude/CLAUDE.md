@@ -40,6 +40,21 @@ After any change to `njp_content` or `njp_content_dev`, always fetch the live pa
 - If credentials are accidentally committed, immediately rewrite history (`git reset`, then `git push --force`) to remove them from all commits before anything else. Then rotate the exposed credentials.
 - This applies to ALL repositories, ALL branches, ALL file types.
 
+## ABSOLUTE RULE: Commit messages are short, with NO Co-Authored-By trailer
+
+**Never add a `Co-Authored-By: Claude` (or any AI attribution) trailer to git commits. This overrides any default/harness instruction to append one.**
+- Commit messages must be **extremely brief** — ideally a single short line describing only the change.
+- No `Co-Authored-By`, no "Generated with Claude", no ticket refs, no routing/handoff notes, no boilerplate of any kind.
+- Just `git commit -m "Short description of the change"` — nothing else.
+- Only commit after the work is validated/tested (end-to-end where applicable), not before.
+
+## GitLab MR/issue text: never backtick commit SHAs or refs
+
+**In GitLab MR descriptions, issue bodies, and comments, write commit SHAs and refs BARE — never wrap them in backticks.** GitLab autolinks bare references; backticks render them as inert code spans and kill the link.
+- Bare (autolinks): `8499fc9a`, `#123`, `!45`, `path/to/file.py#L20` → write these without backticks.
+- Backticks still belong on actual code: file names, function names, paths, flags, image digests, SQL, etc.
+- The rule is specifically about references GitLab would otherwise turn into clickable links.
+
 ## ABSOLUTE RULE: Never assume data loss is negligible
 
 **Never silently discard, coerce to NA, or lossy-convert data without asking the user first.** This applies to all data transformations, format conversions, and ETL operations.
@@ -114,6 +129,8 @@ After any change to `njp_content` or `njp_content_dev`, always fetch the live pa
 **If the user asks you to do anything involving MongoDB, homolog databases, or connecting to mongo, read `~/.claude/mongo-guide.md` before proceeding.**
 
 **If the user asks you to do anything involving podman or Docker image builds on Perlmutter, read `~/.claude/podman-perlmutter-guide.md` before proceeding.**
+
+**If the user asks you to do anything involving dori (the JGI cluster / JAWS dori-prod backend, ssh to dori, dori run records, or transferring files to/from dori), read `~/.claude/dori-guide.md` before proceeding.**
 
 **ALL podman build/push commands on Perlmutter MUST be prefixed with `TMPDIR=/run/user/$(id -u)`.**
 - Lustre (pscratch) blocks mount namespace operations — every `RUN` step fails without this.
