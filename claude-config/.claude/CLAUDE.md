@@ -126,11 +126,33 @@ After any change to `njp_content` or `njp_content_dev`, always fetch the live pa
 
 **If the user asks you to do anything involving njp_content (info pages, restriction text, publications, recent genome releases, viewProjectSection), read `~/.claude/njp_content_guide.md` before proceeding.**
 
+**If the user asks you to do anything involving JAMO (file metadata, portal/visibility tags, registering or restoring archive files, `metadata.portal`/`analysis_project`, tape restore), read `~/.claude/jamo-guide.md` before proceeding.**
+
 **If the user asks you to do anything involving MongoDB, homolog databases, or connecting to mongo, read `~/.claude/mongo-guide.md` before proceeding.**
+
+**If the user asks you to do anything involving CHADO (the plant_chado PostgreSQL DB), read the relevant CHADO guide first: `~/.claude/phytozome-chado-guide.md` (schema, type IDs, query patterns — the general one), `~/.claude/chado-gene-extract-guide.md` (dump gene documents from CHADO to JSON and load into mongo), or `~/.claude/chado-rename-guide.md` (rename an organism/proteome across CHADO + PAC2_0 + deploy_config_metadata + njp_content).**
+
+**If the user asks you to do anything involving homologs/orthologs or deflines, read `~/.claude/homolog-pipeline-guide.md`, `~/.claude/homolog-orthotype-guide.md`, or `~/.claude/defline-guide.md` as applicable. For any long-running pipeline that takes a cross-node lock, also see `~/.claude/pipeline-lock-guide.md`.**
 
 **If the user asks you to do anything involving podman or Docker image builds on Perlmutter, read `~/.claude/podman-perlmutter-guide.md` before proceeding.**
 
 **If the user asks you to do anything involving dori (the JGI cluster / JAWS dori-prod backend, ssh to dori, dori run records, or transferring files to/from dori), read `~/.claude/dori-guide.md` before proceeding.**
+
+**If the user asks you to do anything involving deployments, `njphytozome.json`, `deploy_config_metadata`, `current_release`, or promoting proteomes to dev/prod, read `~/.claude/deploy-config-metadata-guide.md` before proceeding.**
+
+**If the user asks you to do anything involving restricting/unrestricting a proteome, read `~/.claude/restriction-guide.md` before proceeding.**
+
+**If the user asks you to do anything involving BioMart (`phytozome_mart_C`, the Genomes/Families frontend, the organism filter dropdown, or ortholog/homolog loads into the mart), read `~/.claude/biomart-guide.md` before proceeding.**
+
+**If the user asks about releasing a proteome end-to-end (what's needed to get a genome onto dev/prod), read `~/.claude/phytozome-release-guide.md` for the full checklist.**
+
+**If the task involves salloc, interactive compute nodes, holding/keeping an interactive allocation alive, or running work on a compute node (e.g. needing more memory than the login-node per-user cgroup cap), read `~/.claude/salloc-screen-guide.md` before proceeding.** A bare `salloc` in a detached screen exits and releases the node — the allocation only stays alive while a foreground command (`salloc … srun <command>`) occupies it.
+
+**`module load` modifies PATH/PYTHONPATH in the CURRENT shell only — never pipe it or run it in a subshell.**
+- `module load X | head`, `(module load X; …)`, or `module load X` inside a pipeline all run in a **subshell**; the env change is lost when the subshell exits, so a later command sees the old PATH.
+- This bites JAMO: `module load jamo | …` then `python3 …` fails with `ModuleNotFoundError: No module named 'sdm_curl'` (jamo puts sdm_curl on PYTHONPATH, but the subshell threw that away).
+- Correct: run `module load X` on its own line, or chain with `;`/`&&` (NOT a pipe) in the SAME command: `module load jamo && python3 script.py`. Plain redirections (`2>&1`, `>/dev/null`) are fine — they don't create a subshell.
+- Shell state also does NOT persist between separate Bash tool calls, so always `module load` in the same command as the work that needs it.
 
 **ALL podman build/push commands on Perlmutter MUST be prefixed with `TMPDIR=/run/user/$(id -u)`.**
 - Lustre (pscratch) blocks mount namespace operations — every `RUN` step fails without this.
