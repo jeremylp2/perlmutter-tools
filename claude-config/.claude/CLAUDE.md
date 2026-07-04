@@ -136,6 +136,8 @@ After any change to `njp_content` or `njp_content_dev`, always fetch the live pa
 
 **If the user asks you to do anything involving podman or Docker image builds on Perlmutter, read `~/.claude/podman-perlmutter-guide.md` before proceeding.**
 
+**If the user asks you to do anything involving SPIN, Helm, kubectl, Kubernetes, Rancher, or deploying/running workloads on the NERSC SPIN cluster (namespaces `dsi`/`plant`, `~/.kube/development.yaml`, k8s Jobs, PVCs, ingress, the pfam-universal app or `pfam-es`), read `~/.claude/spin-helm-guide.md` before proceeding.**
+
 **If the user asks you to do anything involving dori (the JGI cluster / JAWS dori-prod backend, ssh to dori, dori run records, or transferring files to/from dori), read `~/.claude/dori-guide.md` before proceeding.**
 
 **If the user asks you to do anything involving deployments, `njphytozome.json`, `deploy_config_metadata`, `current_release`, or promoting proteomes to dev/prod, read `~/.claude/deploy-config-metadata-guide.md` before proceeding.**
