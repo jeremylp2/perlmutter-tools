@@ -55,6 +55,14 @@ After any change to `njp_content` or `njp_content_dev`, always fetch the live pa
 - Backticks still belong on actual code: file names, function names, paths, flags, image digests, SQL, etc.
 - The rule is specifically about references GitLab would otherwise turn into clickable links.
 
+## ABSOLUTE RULE: Check the git branch BEFORE any edit — non-negotiable, every time
+
+**A project's changes must NEVER land on another project's/feature's branch.** This check is mandatory and happens FIRST, before touching any file in a `~/git/*` repo — no exceptions. A shared checkout can be left on any branch: another person or session may `git checkout` a different feature branch while you're away, so the branch is never assumed.
+- FIRST action before editing or committing in a repo: run `git rev-parse --abbrev-ref HEAD` and confirm it is the correct branch for THIS task. Do it again before committing. If you're not certain which branch the task belongs on, ask before editing.
+- If HEAD is a feature branch for unrelated work — e.g. you're about to edit homolog-pipeline files but HEAD is an hmmsearch feature branch — STOP. Do not edit. Switch to the correct branch first (preserving any in-progress work on the current branch, e.g. commit it to its own branch or `git stash`). Homolog-pipeline features must never appear on an hmmsearch branch, and vice versa.
+- `git status` before editing: tracked files modified by someone else, or untracked files you didn't create, mean another person's work is present — never commit, revert, or delete it; leave it exactly as found (stash/commit it to its own branch before switching).
+- If you catch a change already made on the wrong branch: save it (`git diff <file> > <file>.patch` under `$SCRATCH`), `git restore <file>` to revert it there, switch to the correct branch, then re-apply. Never commit onto the wrong branch.
+
 ## ABSOLUTE RULE: Never assume data loss is negligible
 
 **Never silently discard, coerce to NA, or lossy-convert data without asking the user first.** This applies to all data transformations, format conversions, and ETL operations.
