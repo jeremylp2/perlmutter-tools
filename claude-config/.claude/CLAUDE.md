@@ -63,6 +63,14 @@ After any change to `njp_content` or `njp_content_dev`, always fetch the live pa
 - `git status` before editing: tracked files modified by someone else, or untracked files you didn't create, mean another person's work is present — never commit, revert, or delete it; leave it exactly as found (stash/commit it to its own branch before switching).
 - If you catch a change already made on the wrong branch: save it (`git diff <file> > <file>.patch` under `$SCRATCH`), `git restore <file>` to revert it there, switch to the correct branch, then re-apply. Never commit onto the wrong branch.
 
+## ABSOLUTE RULE: `git fetch` BEFORE rebasing onto master/trunk — never rebase onto a stale local ref
+
+**The entire point of rebasing a branch is to replant its commits on the CURRENT tip of the trunk. A local `master`/`main`/`develop` ref is a stale snapshot from the last fetch and is routinely behind the remote — rebasing onto it silently drops every commit teammates pushed since, and the branch looks "done" while missing real work.**
+- Before ANY `git rebase master` (or merge-prep against a trunk), FIRST run `git fetch origin` (or `git remote update`), then rebase onto the **remote-tracking ref**: `git rebase origin/master` — NOT the local `master`.
+- After rebasing, VERIFY the branch actually contains the trunk tip before pushing: `git merge-base --is-ancestor origin/master <branch>` must return true, and eyeball that recent trunk commits (e.g. teammates' latest) are present. If not, you rebased onto a stale base — redo it against `origin/master`.
+- This applies to merges too: never merge/compare against a local trunk ref you haven't just fetched. "It said master was fully contained" is meaningless if `master` is a week-old local copy.
+- Rebasing rewrites commit SHAs, so an already-pushed branch then needs a force-push (`git push --force-with-lease`). That is normal for a personal topic branch — but NEVER force-push a shared/protected branch (master/main).
+
 ## ABSOLUTE RULE: Never assume data loss is negligible
 
 **Never silently discard, coerce to NA, or lossy-convert data without asking the user first.** This applies to all data transformations, format conversions, and ETL operations.
@@ -145,6 +153,8 @@ After any change to `njp_content` or `njp_content_dev`, always fetch the live pa
 **If the user asks you to do anything involving podman or Docker image builds on Perlmutter, read `~/.claude/podman-perlmutter-guide.md` before proceeding.**
 
 **If the user asks you to do anything involving SPIN, Helm, kubectl, Kubernetes, Rancher, or deploying/running workloads on the NERSC SPIN cluster (namespaces `dsi`/`plant`, `~/.kube/development.yaml`, k8s Jobs, PVCs, ingress, the pfam-universal app or `pfam-es`), read `~/.claude/spin-helm-guide.md` before proceeding.**
+
+**If the user asks you to set up a file watcher / live-reload / hot-reload / auto-rebuild dev loop (vite/webpack/nodemon `--watch`, HMR) where the source is on CFS/GPFS/Lustre/NFS (e.g. a SPIN pod hostPath-mounting a CFS source), read `~/.claude/watchers-gpfs-guide.md` FIRST. Short version: inotify does NOT fire on GPFS/CFS at all — watch a NODE-LOCAL copy and stat-poll the CFS source into it. Do not waste time re-discovering this.**
 
 **If the user asks you to do anything involving dori (the JGI cluster / JAWS dori-prod backend, ssh to dori, dori run records, or transferring files to/from dori), read `~/.claude/dori-guide.md` before proceeding.**
 
