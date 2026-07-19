@@ -70,10 +70,18 @@ it's the same genome schemas, split out by the portal config.
 - **Phyco classification**: walk the `parent` chain; membership under `fungal-program-phycocosm-genome`
   or `fungal-program-phycocosm-groups` ⇒ Phycocosm, else Mycocosm.
 
-**No PFAM provenance/versioning** anywhere in these DBs: `proteinipr` has no Pfam-release, no
+**No PFAM provenance/versioning is stored in these DBs**: `proteinipr` has no Pfam-release, no
 InterProScan/HMMER version, no run date; no analysis/version table in the genome schema. The only
-`version` is the genome release version. To pin the actual Pfam release you must map the genome's
-annotation date/release to JGI's **pipeline history** (Mycocosm annotation team / Igor S) — not in-DB.
+`version` is the genome release version. The provenance lives only in JGI's **pipeline history**
+(Mycocosm annotation team / Igor S), out-of-band.
+
+> **PROVENANCE (per the Mycocosm group, 2026):** the Mycocosm/Phycocosm PFAM domains were called with
+> **`interproscan-5.9-50.0-P8`** — i.e. InterProScan **5.9-50.0** (InterPro data release 50.0, early
+> 2015), JGI pipeline protocol **P8**. The bundled Pfam member-DB release for IPS 5.9-50.0 is **Pfam
+> 27.0** (confirm against the IPS 5.9-50.0 member-DB manifest if it matters). The `P8`/`P9`… tags also
+> appear in test-genome codes (e.g. `Galpa001_1_TEST_P8_3`, `..._TEST_P9_25d_1`) — those are the
+> annotation **protocol** versions. So HMMPfam hits here reflect ~Pfam 27.0 / IPS 5.9-50.0, not a
+> current Pfam release.
 
 ## 3. IMG — `img-db-2_postgresql` (+ `numg_hive`, GOLD)
 
@@ -159,8 +167,10 @@ non-obsolete gene features.
   (`protein_id` currently = `gene_oid`, should be `locus_tag`).
 
 **Provenance (all portals)**
-- [ ] No Pfam-release / InterProScan version is captured for Myco/Phyco (or IMG) hits — flag as a known
-  limitation if version provenance ever matters. Would require the annotation pipeline history, not the DBs.
+- No Pfam-release / InterProScan version is *stored in the DBs* — it comes from pipeline history.
+  **Myco/Phyco RESOLVED**: `interproscan-5.9-50.0-P8` → ~Pfam 27.0 (see the Provenance box in §2).
+- [ ] **IMG** Pfam-assignment version still unknown — get the IMG annotation pipeline's Pfam/HMMER
+  version from the IMG team if version provenance matters there.
 
 ---
 
