@@ -42,6 +42,34 @@ Host: `plant-db-5.jgi.lbl.gov:3306`
 - Used for project-level content: portal home page sections, shared overviews, inPress items (e.g. SorghumPan, BrapaPan)
 - Has its own `viewProjectSectionType` table (same structure as viewInfoSectionType)
 
+### CRITICAL: both section-TYPE tables key on column `id`, NOT `vstId`
+`SELECT vstId FROM viewProjectSectionType` / `viewInfoSectionType` **errors** — the PK column is `id`. Join as `vt.id = vis.vstId`. And the two type tables use **different numbering**:
+
+| meaning | viewInfoSectionType.id | viewProjectSectionType.id |
+|---|---|---|
+| overview | 1 | 1 |
+| restrictions | **8** | **9** |
+| contacts | **6** | **10** |
+| associatedPublications | 7 | 6 |
+| refCiteDOI | **14** | 7 |
+| otherCiteDOI | 15 | 8 |
+| inPress | 17 | 13 |
+| news / status / recent | – | 2 / 3 / 4 |
+
+So a project page's Contacts is `vstId=10` while a genome page's Contacts is `vstId=6`. Borrowing content between them means remapping the vstId.
+
+### Rendering gotchas (hard-won — cost many iterations)
+- **`<style>` blocks are STRIPPED by the content renderer. Inline `style=` attributes ONLY.** A scoped `<style>.cls{...}</style>` silently does nothing, so the element falls back to browser defaults (looks like "my CSS was ignored").
+- **`<dd>` carries a default left margin (~40px)** → content sits indented while `<dt>` headings are flush. To flush it: `<dd style="margin-left:0; margin-inline-start:0;">` (set BOTH — UA sheets use the logical property).
+- **Leave `<ul>` alone.** Its padding IS the bullet indent; zeroing it breaks bulleted contact/author lists.
+- **The Pattern C template in the corpus is malformed** — it ends with `<dl>` instead of `</dl>`, leaving the definition list unclosed (mangled rendering). Write `</dl>`.
+- Tables that render well in the content column: natural width — **do NOT use `table-layout:fixed` or a `<colgroup>`** (they crush 7 columns into near-vertical text) — and **no horizontal-scroll wrapper**. Use `border-collapse:collapse`, `font-size:12px`, per-cell `padding:1px 4px`, **wrapping headers** (never `white-space:nowrap`, that forces wide columns), header shading `#e3ebe6` at ~10.5px bold, zebra rows `#f5f8f6`.
+- njp_content edits are served **live** by the content API — no rebuild needed. But `/api/content/info/<pid>` lists **every** section typeName regardless of content, so presence in that list does NOT mean the section has content; check the `html` field.
+
+### Publications
+- `refCiteDOI` stores a **bare DOI** (`10.1038/nature08747`) — no `https://doi.org/` prefix; the frontend resolves via crossref.
+- Established pattern: once a proteome has a real reference DOI, the redundant "please cite … Phytozome" restrictions row is **deactivated** (`active=0`) rather than deleted.
+
 #### Recent Genome Releases table
 - `id=32`, `versionId='14.0.01'`, `zome='Phytozome'`, `vstId=1`, `active=1`
 - This is the table shown on the Phytozome home page listing recently released genomes
