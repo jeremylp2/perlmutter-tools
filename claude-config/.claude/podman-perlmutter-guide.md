@@ -53,18 +53,14 @@ TMPDIR=/run/user/$(id -u) podman build \
 # Push
 TMPDIR=/run/user/$(id -u) podman push docker.io/jlphillipslbl/hmmsearch-pipeline:latest
 
-# Get the digest (manifest v2 hash — this is the authoritative SHA256 to use everywhere):
-curl -s \
-    "https://registry-1.docker.io/v2/jlphillipslbl/hmmsearch-pipeline/manifests/latest" \
-    -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
-    -H "Authorization: Bearer $(curl -s \
-        'https://auth.docker.io/token?service=registry.docker.io&scope=repository:jlphillipslbl/hmmsearch-pipeline:pull' \
-        | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')" \
-    | python3 -c "
-import hashlib, sys
-body = sys.stdin.buffer.read()
-print('sha256:' + hashlib.sha256(body).hexdigest())
-"
+# Get the digest — ALWAYS read the Docker-Content-Digest RESPONSE HEADER (authoritative):
+REPO=jlphillipslbl/hmmsearch-pipeline; TAG=latest
+TOKEN=$(curl -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${REPO}:pull" \
+        | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
+curl -sD - -o /dev/null "https://registry-1.docker.io/v2/${REPO}/manifests/${TAG}" \
+    -H "Accept: application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.index.v1+json" \
+    -H "Authorization: Bearer $TOKEN" \
+    | grep -i '^docker-content-digest:' | awk '{print $2}' | tr -d '\r'
 
 # Pull into Shifter using the full SHA256 digest — ALWAYS, no exceptions:
 shifterimg pull docker.io/jlphillipslbl/hmmsearch-pipeline@sha256:<64-hex-digest>
@@ -73,6 +69,26 @@ shifterimg images | grep <short-digest>   # must show READY
 # Use the same full digest in all WDL docker fields:
 #   docker: "docker.io/jlphillipslbl/hmmsearch-pipeline@sha256:<64-hex>"
 ```
+
+## DIGEST TRAP — why the header, not a hash of the manifest body
+
+Podman often pushes an **OCI** manifest. If you request the manifest with
+`Accept: application/vnd.docker.distribution.manifest.v2+json` and hash the returned body, the
+registry may hand back a *converted* manifest whose sha256 is **not a pullable digest**. Symptom:
+
+    shifterimg pull docker.io/<repo>@sha256:<that-hash>   ->  status: FAILURE
+
+…even though the repo is public and the tag exists. The `Docker-Content-Digest` response header
+always reports the digest the registry actually stores. (Real case: jbpythonscripts computed
+`f111e922…` by body-hash but the real digest was `4a3352dc…`; another image happened to match,
+which makes this failure mode look random.)
+
+Sanity check after every push: `shifterimg pull <repo>@<digest>` must reach `status: READY`.
+
+## Rootless build gotcha
+
+`RUN curl … | tar -xj` fails with `Cannot change ownership to uid …: Invalid argument`.
+Add `--no-same-owner`: `| tar -xj --no-same-owner`.
 
 ## Repository visibility
 

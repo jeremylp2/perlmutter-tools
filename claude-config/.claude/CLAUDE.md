@@ -140,6 +140,8 @@ After any change to `njp_content` or `njp_content_dev`, always fetch the live pa
 
 **If the user asks you to do anything involving JAWS, read `~/.claude/jaws-guide.md` before proceeding.**
 
+**If the user asks you to do anything involving JBrowse (building/deploying a browser, tracks, trackList.json, fulldataset.json, repairing or replacing a single track, or the JBPublic/JBPrivate WDL pipelines), read `~/.claude/jbrowse-guide.md` before proceeding.**
+
 **If the user asks you to do anything involving njp_content (info pages, restriction text, publications, recent genome releases, viewProjectSection), read `~/.claude/njp_content_guide.md` before proceeding.**
 
 **If the user asks you to do anything involving JAMO (file metadata, portal/visibility tags, registering or restoring archive files, `metadata.portal`/`analysis_project`, tape restore), read `~/.claude/jamo-guide.md` before proceeding.**
@@ -178,7 +180,7 @@ After any change to `njp_content` or `njp_content_dev`, always fetch the live pa
 - Lustre (pscratch) blocks mount namespace operations — every `RUN` step fails without this.
 - `TMPDIR=/run/user/$(id -u) podman build -t <image>:<tag> .`
 - `TMPDIR=/run/user/$(id -u) podman push <image>:<tag>`
-- Get digest after push: use the curl+python3 method in `~/.claude/podman-perlmutter-guide.md`
+- Get digest after push: read the **Docker-Content-Digest response header** — see `~/.claude/podman-perlmutter-guide.md`
 - Pull into Shifter by digest (NEVER by tag): `shifterimg pull <image>@sha256:<64-char-hex-digest>`
 - Docker Hub login: `echo "<password>" | podman login docker.io -u "jlphillips@lbl.gov" --password-stdin`
 
@@ -186,7 +188,7 @@ After any change to `njp_content` or `njp_content_dev`, always fetch the live pa
 - Tags are mutable and non-deterministic — they resolve differently across nodes and change as images are updated.
 - Always write: `image@sha256:<full-64-char-hex-digest>`
 - Never write: `image:tag` or `image:tag@sha256:...` (tag portion is ignored by Shifter)
-- After `podman push`, always compute the digest with the curl+python3 manifest hash method from `~/.claude/podman-perlmutter-guide.md`
+- After `podman push`, always take the digest from the **Docker-Content-Digest response header** (NOT a hash of the manifest body — that silently breaks for OCI manifests); see `~/.claude/podman-perlmutter-guide.md`
 - Before running any workflow, verify every image digest in every WDL task is pre-pulled in Shifter.
 - Verify ready: `shifterimg images | grep <short-digest>` — status must be READY
 
@@ -211,6 +213,28 @@ After any change to `njp_content` or `njp_content_dev`, always fetch the live pa
 - After launching a screen, always wait 3-5 seconds, then read the log file and verify the "Running on …" line is present. If it's not, the launch failed — debug; do NOT relaunch blindly.
 - `nohup` alone is NOT sufficient — use screen/tmux.
 - Read-only audits (no writes anywhere) are the only exception; they may run in foreground if they take <30s and cannot leave inconsistent state.
+
+**THE TOOL TIMEOUT WILL KILL YOUR JOB. This rule is about DURATION, not just shared state.**
+- The Bash tool's DEFAULT timeout is 2 MINUTES. When it fires the command is SIGTERM'd
+  mid-flight. This has broken work repeatedly. Assume every foreground call is on a 2-minute
+  fuse unless you explicitly say otherwise.
+- **If a command could plausibly take >60s, it goes in `screen`. No exceptions, no "this one
+  is probably quick."** Duration alone is sufficient reason — the command does NOT also have
+  to touch shared state.
+- Commands that ALWAYS go in screen, never foreground:
+  `podman build` / `podman push` / `docker build`, `shifterimg pull`, any Cromwell/JAWS/java
+  run, `mongoimport`/`mongodump`, `pg_dump`/large `psql` queries, big `rsync`/`cp`/`tar`,
+  `conda`/`pip install`, anything looping over many proteomes/files.
+- If a foreground call is genuinely unavoidable, you MUST pass an explicit generous `timeout`
+  (the Bash tool accepts up to 600000 ms = 10 min). NEVER rely on the default for real work.
+- A SIGTERM'd build does not simply "stop" — it strands children. Real case (2026-07):
+  `podman build` on CFS-backed storage (`/global/cfs/cdirs/plant/podman/storage/`) was killed
+  by the 2-minute default and left ~5 orphaned `fuse-overlayfs` mounts on SHARED storage,
+  after which even `podman images` hung. Cleanup then required asking the user, because the
+  storage is shared. Cost: the whole build had to be redone.
+- When polling for a process to finish, NEVER use a `pgrep -f <pattern>` whose pattern appears
+  in the polling command's own command line — it matches itself and loops forever. Match the
+  real binary/PID, or check for a completion artifact (rc file, output file, log line).
 
 **ABSOLUTE RULE: Pre-launch overlap check is ALWAYS multi-node, ALWAYS based on recorded job locations.**
 - Before launching ANY process (background shell, screen session, or foreground command), VERIFY that no existing process is already doing the same work, anywhere across all login nodes.
