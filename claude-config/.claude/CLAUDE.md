@@ -40,6 +40,37 @@ After any change to `njp_content` or `njp_content_dev`, always fetch the live pa
 - If credentials are accidentally committed, immediately rewrite history (`git reset`, then `git push --force`) to remove them from all commits before anything else. Then rotate the exposed credentials.
 - This applies to ALL repositories, ALL branches, ALL file types.
 
+## ABSOLUTE RULE: NEVER commit handoff, session, or operational docs to git
+
+**THIS IS A CARDINAL SIN, ON EXACTLY THE SAME LEVEL AS COMMITTING PLAINTEXT PASSWORDS OR PRIVATE KEYS. IT IS AN INCIDENT. THERE IS NO EXCEPTION, NO CIRCUMSTANCE, NO "JUST THIS ONCE," AND NO AMOUNT OF USEFULNESS THAT MAKES IT ACCEPTABLE.**
+
+**NEVER, EVER, EVER commit a document written for Claude, by Claude, or to hand state between Claude sessions. Not to any branch. Not to any repo. Not ever.**
+
+Forbidden from git, always — regardless of filename, extension, or directory:
+- Handoff docs, compaction/self-handoff docs, Claude-to-Claude notes, session logs, session summaries.
+- "What I did / current state / how to resume / what's left" write-ups of ANY kind.
+- Operational run-state docs: pre-load state records, test-run notes, environment/provisioning walkthroughs, debugging narratives, migration status reports.
+- Anything whose audience is a future agent or a future session rather than a developer reading the codebase.
+- Files named like `*HANDOFF*`, `*SESSION*`, `*_LOG.md`, `*COMPACT*`, `*PRELOAD*`, `*STATUS*`, `NOTES.md`, `*_GUIDE.md` written for this purpose, and any `README`-ish file that is really a session narrative.
+
+Where these go instead — ALWAYS outside any git working tree:
+- `$SCRATCH` (Perlmutter), or a non-repo shared path (e.g. `/clusterfs/jgi/groups/science/wcplant/phillips/` on dori).
+- NEVER inside a repo checkout, not even untracked — an untracked doc in the tree is one careless `git add -A` away from being committed.
+
+Rules of engagement:
+- **Before every `git add` / `git commit`**: check every staged path. If ANY of it is a doc written for a Claude session, STOP and remove it. This check is mandatory and ranks with the credentials check.
+- **NEVER `git add -A`, `git add .`, or `git commit -a`** when session docs could be anywhere in the tree. Stage explicit paths.
+- The user must never have to ask for this. Do not write the doc into the repo and plan to move it later.
+- Committed code (`.py`, `.sh`, `.wdl`, `.conf`, launchers, crons) is REQUIRED to be tracked — see the track-operational-scripts rule. Docs about running them are NOT. Do not conflate the two.
+
+If one is ever committed, it is an incident — remediate immediately and completely:
+1. Erase it from history so it is **as if it was never added**: drop the commit (`git rebase --onto <bad>^ <bad> <branch>`) if the commit only contains the doc, otherwise rewrite it out.
+2. **NEVER `git revert` it, and NEVER write a commit message that mentions the doc, the removal, or the cleanup** (no "remove handoff doc", no "purge session notes"). A commit describing the deletion leaves exactly the trace you are removing. The resulting history must contain NO evidence the doc ever existed — no commit, no message, no diff, no path.
+3. Force-push the rewritten branch (`--force-with-lease`; personal topic branches only, NEVER a shared/protected branch).
+4. Purge local objects: `git reflog expire --expire=now --expire-unreachable=now <affected reflogs>` then `git gc --prune=now`. Verify with `git cat-file -e <old-sha>` — it must be gone.
+5. Do the same on EVERY other checkout of that branch (other hosts, other worktrees): `git fetch` + `git reset --hard`, delete the file, expire reflogs, gc.
+6. Tell the user the remote host may still retain the orphaned object internally until server-side housekeeping runs, and that it can remain reachable by raw SHA in the web UI until then.
+
 ## ABSOLUTE RULE: Commit messages are short, with NO Co-Authored-By trailer
 
 **Never add a `Co-Authored-By: Claude` (or any AI attribution) trailer to git commits. This overrides any default/harness instruction to append one.**
