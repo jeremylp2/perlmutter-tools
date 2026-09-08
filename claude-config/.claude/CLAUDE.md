@@ -148,6 +148,24 @@ If one is ever committed, it is an incident — remediate immediately and comple
 - Whenever code that produces data is changed, rerun integrity checks — a fix in one place can silently break another.
 - "Mongoimport exit 0" / "json.load worked" / "file has nonzero bytes" are NOT integrity checks; they are weakest-possible existence checks.
 
+## ABSOLUTE RULE: A data-integrity discrepancy is a RED-LIGHTS-FLASHING EMERGENCY — STOP EVERYTHING and investigate to the root cause
+
+**The moment two sources that should agree DON'T (a count mismatch, extra rows, missing rows, a store vs an index, a download vs the table, expected-N vs actual-N), that is a full-stop emergency. Drop all other work — features, UI, deploys, the task you were mid-way through — and investigate immediately until you have the COMPLETE root cause. Do NOT move past it, do NOT "note it and continue," do NOT explain it away as probably-fine. The ONLY thing that lets you defer it is the user EXPLICITLY telling you to.**
+- Data integrity trumps everything else — interface, performance, deadlines, the current task. Every time. A wrong or missing byte of scientific data is worse than a broken button.
+- "Only N rows affected" / "it's a small %" / "probably just a grain difference" / "likely rounding" are FORBIDDEN as reasons to move on. A discrepancy is presumed real and serious until PROVEN benign with exact evidence.
+- Investigate to a FULL explanation, not a partial one: what the exact numbers are on both sides, the mechanism that produced the gap, why that mechanism fired, and whether it touched any live/served artifact (search, downloads, DB). Half an explanation is not an explanation.
+- **NEVER judge integrity with an APPROXIMATE method.** `approx_count_distinct`, ES `cardinality`, HyperLogLog, sampling, and `LIMIT`-based spot checks are estimators (HLL nominal error ~2%, routinely worse — observed 12–16% here) and MUST NOT be compared against an exact count to decide whether data agrees. For any integrity comparison use EXACT counts on BOTH sides, or a direct set-difference/anti-join. An approx-vs-exact gap is NOT evidence of a discrepancy — and is NOT evidence of agreement either.
+- If a number looks wrong, get the EXACT number BEFORE raising it. Until you have exact figures, describe it as "unverified — measuring," never as a confirmed gap. (Raising a false 62M-row "emergency" off an HLL estimate, and separately a false "~611 duplicate docs" off ES `cardinality`, both happened on the same project — do not do it a third time.)
+- A `LIMIT`/first-few-buckets sample is NOT representative and can hide the very rows that cause a discrepancy — never conclude "all clean" from one.
+
+## ABSOLUTE RULE: NEVER write to a partitioned/bucketed output dir that isn't verified EMPTY — check before every bucket write, always, always, always
+
+**A partitioned write (`PARTITION_BY`, Hive buckets, sharded parquet, any `pfam_id_bucket=N/` layout) APPENDS new files; it does NOT replace. So a re-run, resume, or second pass writes a SECOND set of `data_*.parquet` into the SAME bucket dirs, and a later `glob('**/*.parquet')` reads BOTH passes → silent duplication / doubled rows / inflated counts. This class of bug has bitten this work repeatedly (the domain_layout doubling). It ends now.**
+- BEFORE any bucketed/partitioned write: verify EVERY target partition dir is empty (or the whole output root does not yet exist). If it is non-empty, STOP — do not write. Either write to a fresh clean dir, or explicitly delete the old partitions first (with user permission per the destructive-action rule), or use an engine mode that truly overwrites the partition (e.g. DuckDB `OVERWRITE_OR_IGNORE` is NOT enough on its own — confirm it removes prior files).
+- Build to a NEW timestamped/clean output directory per build, then atomically swap it into place — never rebuild in-place over an existing store.
+- AFTER the write: assert one-pass-per-bucket — e.g. total output rows == expected, and no `(key)` appears in more than one file when it shouldn't. Bake this check into the build script so it FAILS loudly on accumulation.
+- Any build script that writes buckets MUST refuse to run against a non-empty output root by default (require an explicit `--fresh`/`--force` flag). No silent append. Ever.
+
 ## ABSOLUTE RULE: Check for duplicate/overlapping processes BEFORE launching
 
 **Before launching any process — foreground, background, or screen session — check that no existing instance of the same work is already running.**
@@ -201,11 +219,12 @@ If one is ever committed, it is an incident — remediate immediately and comple
 
 **If the task involves salloc, interactive compute nodes, holding/keeping an interactive allocation alive, or running work on a compute node (e.g. needing more memory than the login-node per-user cgroup cap), read `~/.claude/salloc-screen-guide.md` before proceeding.** A bare `salloc` in a detached screen exits and releases the node — the allocation only stays alive while a foreground command (`salloc … srun <command>`) occupies it.
 
-**`module load` modifies PATH/PYTHONPATH in the CURRENT shell only — never pipe it or run it in a subshell.**
-- `module load X | head`, `(module load X; …)`, or `module load X` inside a pipeline all run in a **subshell**; the env change is lost when the subshell exits, so a later command sees the old PATH.
-- This bites JAMO: `module load jamo | …` then `python3 …` fails with `ModuleNotFoundError: No module named 'sdm_curl'` (jamo puts sdm_curl on PYTHONPATH, but the subshell threw that away).
-- Correct: run `module load X` on its own line, or chain with `;`/`&&` (NOT a pipe) in the SAME command: `module load jamo && python3 script.py`. Plain redirections (`2>&1`, `>/dev/null`) are fine — they don't create a subshell.
-- Shell state also does NOT persist between separate Bash tool calls, so always `module load` in the same command as the work that needs it.
+**ABSOLUTE RULE: `module load` and the command that needs it MUST be in the SAME Bash tool call — chained with `&&`. This has been botched MANY times; do not do it again.**
+- **Every Bash tool call is a BRAND-NEW shell.** Env changes (`module load`, `export`, `cd`, `source`, activating a venv/conda env) from a PREVIOUS Bash call are GONE. A `module load python` in one tool call followed by `python3 …` in the NEXT tool call runs the OLD system python (e.g. 3.6.15) and fails — this is the exact mistake made repeatedly.
+- **The tell:** you run `module load X`, it "succeeds", then a separate call reports the wrong version / `ModuleNotFoundError` and you're confused why. STOP — it's the tool-call boundary. Re-issue as ONE chained command.
+- **Correct, always:** `module load python/3.13-26.1.0 && python3 script.py` — module load + the work in ONE Bash call, joined by `&&`. Same for jamo: `module load jamo && python3 script.py`. If a script needs several modules, load them all in that same chained command.
+- **Never split it across calls "to check the load worked first."** Loading and using in one command IS the check.
+- Secondary (same root cause — a subshell also discards the env): never pipe or subshell the load. `module load X | head`, `(module load X; …)`, or `module load X` inside a pipeline all run in a **subshell**; the change is lost when the subshell exits. This bites JAMO: `module load jamo | …` then `python3 …` → `ModuleNotFoundError: No module named 'sdm_curl'`. Plain redirections (`2>&1`, `>/dev/null`) are fine — they don't create a subshell.
 
 **ALL podman build/push commands on Perlmutter MUST be prefixed with `TMPDIR=/run/user/$(id -u)`.**
 - Lustre (pscratch) blocks mount namespace operations — every `RUN` step fails without this.
@@ -263,9 +282,26 @@ If one is ever committed, it is an incident — remediate immediately and comple
   by the 2-minute default and left ~5 orphaned `fuse-overlayfs` mounts on SHARED storage,
   after which even `podman images` hung. Cleanup then required asking the user, because the
   storage is shared. Cost: the whole build had to be redone.
-- When polling for a process to finish, NEVER use a `pgrep -f <pattern>` whose pattern appears
-  in the polling command's own command line — it matches itself and loops forever. Match the
-  real binary/PID, or check for a completion artifact (rc file, output file, log line).
+**ABSOLUTE RULE: NEVER `pgrep -f`/`pkill -f` a pattern that appears in the SAME command line.**
+This has been botched many times — do not do it again. `pgrep -f`/`pkill -f` match against every
+process's FULL command line, and a shell running `... setsid bash foo.sh ... ; pgrep -f foo.sh`
+has `foo.sh` in ITS OWN command line, so the check matches the launcher itself. The two classic
+manifestations:
+- **Launch guards**: `if pgrep -f foo.sh; then echo RUNNING; exit; fi; setsid bash foo.sh` — the
+  `bash -c` wrapper's cmdline contains `foo.sh` (from the launch half), so the guard ALWAYS fires
+  "already running" and the process NEVER launches. (Happened repeatedly.)
+- **Poll loops**: a poll whose own cmdline contains the pattern matches itself and never exits.
+- The `[f]oo.sh` bracket trick ONLY defeats pgrep's self-exclusion; it does NOT help when the
+  SAME command ALSO contains the literal `foo.sh` (e.g. the launch string) — that literal still
+  matches. So the bracket trick is useless in a combined check+launch command.
+- **The fixes (use these):** (1) put the running-check and the launch in SEPARATE Bash/ssh calls
+  so neither command's cmdline names the other's target; (2) don't identify a process by its
+  script name at all — have the script write `PID=$$` to its logfile on line 1 and verify with
+  `pid=$(grep -o 'PID=[0-9]*' log | cut -d= -f2); kill -0 "$pid"`; (3) check for a completion
+  artifact (rc file, output file, log line) instead of a process.
+- Backgrounding a detached job over ssh (`setsid ... &`) can also hold the ssh channel open until
+  the tool times out even though the job launched fine — verify with a SEPARATE read-only ssh
+  (logged-PID method), don't assume the launch failed because the launch call hung.
 
 **ABSOLUTE RULE: Pre-launch overlap check is ALWAYS multi-node, ALWAYS based on recorded job locations.**
 - Before launching ANY process (background shell, screen session, or foreground command), VERIFY that no existing process is already doing the same work, anywhere across all login nodes.
@@ -310,9 +346,35 @@ If one is ever committed, it is an incident — remediate immediately and comple
 **Check storage and inode usage with `myquota`.**
 - pscratch has separate inode and capacity limits. Inode exhaustion is a silent killer — check before large runs.
 
+**ABSOLUTE RULE: Right-size EVERY compute job — never copy previous resource settings.**
+- Before submitting ANY job to JAWS or a SLURM queue, STOP and deliberately reason about what THIS job actually needs: cores, memory, and wall time. State the reasoning (e.g. "diamond self-blastp of ~8k proteins → seconds, ~2 GB, 2 cores").
+- NEVER blindly copy `runtime {}` / `#SBATCH` / cpu/memory settings from another task, an existing WDL, or a prior job. Settings that fit a big multi-pair task are wildly oversized for a small single-pair one.
+- Over-requesting is not "safe": on JAWS/glidein pools and SLURM, large per-task cpu/memory requests mean FEWER tasks pack per node, so a batch of small jobs BACKS UP behind giant reservations and drains far slower (observed 2026-09-08: 435 tiny diamond self-comparisons each requesting 64G/32G sat entirely `queued`/`ready`, zero running, for 8+ hours).
+- Right-size to the actual need plus a modest safety margin; sanity-check the biggest item in the batch separately if sizes vary a lot, rather than sizing everything for the worst case.
+- For many small, easy computes, weigh running them directly (interactive/compute node via Shifter, densely parallel) against per-job queue/staging overhead — the queue is often the bottleneck, not the compute.
+
 **SLURM `--exclusive` allocates a full CPU node: 128 cores / 256 hardware threads.**
 
 **Bash `&` backgrounding in a SLURM batch script only runs on the primary node, even with `-N 2`.**
 - Worker nodes sit completely idle — you waste 100% of their allocation.
 - To actually use multiple nodes, you must dispatch work explicitly with `srun --nodelist=<node>` or use a proper parallel launcher (MPI, etc.).
 - Default to `-N 1` for bash-backgrounded workloads. Only use `-N >1` if you are explicitly dispatching with `srun`.
+
+** NERSC/Perlmutter rules
+- Never recursively traverse `/`, `/global`, `/global/cfs`, `/global/homes`,
+  `/pscratch`, `/opt`, `/usr`, or another shared top-level directory. This
+  prohibition applies on compute nodes as well as login nodes.
+- This prohibition includes `find`, `bfs`, `fd`, `tree`, recursive `du`,
+  `rg --files`, recursive `grep`, recursive `ls`, globstar expansion, and
+  recursive traversal written in Python or another language.
+- Before searching, identify a bounded root inside the current workspace or a
+  known project or data directory. Constrain depth and filename patterns where
+  possible. If no bounded root is known, stop and ask the user.
+- Locate software with `command -v`, `type -a`, `module spider`, package
+  metadata, or known environment prefixes. Do not search mounted filesystems
+  for executables.
+- Do not disable or bypass an installed filesystem-traversal hook, and do not
+  ask the user to approve an equivalent broad scan through another command.
+- A compute allocation is not permission for an unbounded traversal of a
+  shared filesystem. Narrow the search first; route only bounded,
+  computationally substantial searches through `$perlmutter-compute`.
