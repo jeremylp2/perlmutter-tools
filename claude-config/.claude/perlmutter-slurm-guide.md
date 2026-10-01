@@ -13,9 +13,19 @@ limits with the same command before relying on them — QOS tables change.
 
 1. **Overlap check before launch — is this work already in SLURM?** The cluster's queue is the source
    of truth for jobs; a login-node `ps`/`screen -ls` cannot see them.
-   - Give every kind of work a distinctive job name (`-J liftoff_A_vs_B`, not `-J job`) so it can be found exactly.
-   - **Queued or running:** `squeue -u $USER --name=<name> -h -o '%i %j %T %M %R'` — anything listed,
-     PENDING included → STOP. `--name` is an exact match *(verified 2026-10-01)*.
+   - Give jobs a distinctive name that includes the run's identifier (`-J liftoff_A_vs_B`, not `-J job`) so
+     they can be found exactly.
+   - **Queued or running:** `squeue -u $USER --name=<name> -h -o '%i %j %T %M %R'` (PENDING counts as
+     present). `--name` is an exact match *(verified 2026-10-01)*.
+   - **A match is a reason to look, not an automatic stop** — the same pipeline is often run several times
+     on different inputs. Find out what the existing job is doing:
+     `sacct -j <id> -X -P --format=JobID,JobName,State,SubmitLine%300,WorkDir%150` (the full submit command
+     with the script's arguments) and `scontrol show job <id>` (`Command=` script, `StdOut=` log) *(verified 2026-10-01: `SubmitLine` held the full command of a finished job; for a scrontab job it is empty and `Command=(null)` — read the entry from `scrontab -l`)*.
+     Then compare its inputs and outputs with the planned run:
+     - **Same outputs** (same output dir/files, same DB table/collection) → **STOP**. Two runs writing the
+       same outputs corrupt them. Wait for it, or ask the user.
+     - **Different inputs and outputs** → OK to launch; **tell the user** the other run exists (name, ID, state).
+     - **Can't tell** → ask the user before launching.
    - **Recently ended:** `sacct -u $USER --name=<name> -S <date before the last run> -X -P --format=JobID,State,Start,End`.
      `-S` returns only jobs from that time on (*verified*: a job that ran 2026-09-24 was missing with
      `-S 2026-09-25`). A previous run that finished or died may have left full or partial outputs — check
@@ -25,7 +35,8 @@ limits with the same command before relying on them — QOS tables change.
    - **Only if a controller runs on a login node** (a `screen` holding a `salloc`, or a loop that submits or
      monitors jobs): also check that process on the login node recorded in its log's first line
      (`ssh <node> screen -ls`, `ssh <node> kill -0 <PID>`). Such a loop is invisible to `squeue` until it submits.
-   - Anything found → STOP. Never launch "just in case".
+   - A controller doing the same work as you plan gets the same same-outputs/different-outputs decision.
+     Never launch a duplicate "just in case".
 2. **One item first.** Run a single file/proteome/shard, time it, verify its output, then the batch.
 3. **Right-size every job** from what THIS job needs (state the reasoning: cores, GB, minutes).
    Never copy `#SBATCH` lines from another job. Oversized walltime/`--exclusive` kills backfill.
