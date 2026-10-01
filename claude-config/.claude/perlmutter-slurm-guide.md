@@ -1,10 +1,8 @@
 # SLURM jobs on Perlmutter — submit, monitor, and prove TRUE completion
 
-For any agent that launches compute work on NERSC Perlmutter. Companion guides:
-`salloc-screen-guide.md` (detached interactive jobs), `jaws-guide.md` (JAWS/Cromwell — a different
-submission path), `es-fast-build-guide.md` (multi-node srun lessons), `pipeline-lock-guide.md`
-(cross-host mutual exclusion). **dori is a separate cluster with different rules** — for dori jobs
-(including submitting to dori from Perlmutter) read `dori-slurm-guide.md` in the **dori-tools** repo.
+For any agent that launches compute work on NERSC Perlmutter. Self-contained: everything needed is
+in this file. It covers Perlmutter only — other clusters (e.g. JGI dori) have different accounts,
+QOS, paths and limits, and nothing here should be assumed to hold there.
 
 Facts marked *(verified 2026-10-01)* were checked on a Perlmutter login node with the command shown. Re-verify
 limits with the same command before relying on them — QOS tables change.
@@ -46,7 +44,7 @@ limits with the same command before relying on them — QOS tables change.
 | QOS (`-q`) | Max wall | Per-user limits | Use for |
 |---|---|---|---|
 | `debug` | 00:30:00 (use `--time=00:29:00`) | 2 running, 5 submitted | quick tests |
-| `interactive` | 04:00:00 | 2 submitted | `salloc` (1–2 nodes, ≤4 h) — see `salloc-screen-guide.md` |
+| `interactive` | 04:00:00 | 2 submitted | `salloc` (1–2 nodes, ≤4 h) — see §3 "Interactive allocation" |
 | `shared` | 2-00:00:00 | — | **small jobs** (a few cores/GB) on shared nodes; no `--exclusive` |
 | `regular` | 2-00:00:00 | — | whole-node work (sacct records it as `regular_0`/`regular_1`) |
 | `preempt` | 2-00:00:00 | — | cheaper, can be preempted (cluster PreemptMode=REQUEUE) |
@@ -105,12 +103,45 @@ echo "submitted $JOB"
 - Pending job with too long a walltime: `scontrol update jobid=$JOB TimeLimit=00:20:00` (keeps the ID,
   so dependencies stay intact).
 
+### Interactive allocation that survives disconnects (salloc inside screen)
+For ≤4 h, 1–2 node work that you want to run now rather than queue. Run it inside a detached `screen`
+so it survives the agent session ending; log everything to a file:
+```bash
+LOG=$SCRATCH/myjob.log
+screen -dmS myjob bash -c "echo \"Running on \$(hostname) at \$(date) PID=\$\$\" > $LOG
+salloc -A <project> -C cpu -q interactive -t 04:00:00 -N 1 \
+  srun python3 -u /path/to/work.py >> $LOG 2>&1
+echo \"salloc exit=\$? at \$(date)\" >> $LOG"
+```
+- `interactive` is **salloc-only**, and needs `-C cpu` like every other QOS *(verified 2026-10-01:
+  `sbatch --test-only -C cpu -q interactive …` → `Cannot submit batch jobs to interactive_ss11`; without
+  `-C cpu` → `does not match any supported policy`)*. `salloc` has no `--test-only`.
+- **Keep the `srun`.** `salloc <cmd>` runs `<cmd>` on the login node, not on the allocated compute node;
+  `srun` dispatches it to the node.
+- **A bare `salloc` (no command) in a detached screen exits immediately and releases the node** — the
+  allocation only lives while a foreground command (`salloc … srun <cmd>`) occupies it.
+- `screen` is local to the login node it was started on: record the node (first log line), check it with
+  `ssh <node> screen -ls`, reattach with `ssh <node>` then `screen -r myjob`.
+- Wait a few seconds after launch and confirm the `Running on …` line is in the log; if not, the launch
+  failed — investigate, do not relaunch blindly.
+- Chaining steps: gate step 2 on step 1's success artifact (e.g. `grep -q 'ALL DONE' step1.log && salloc … step2`).
+
 ## 4. scrontab (Perlmutter cron)
 - Entries run as `cron`-QOS jobs. **`REQUEUED` is their normal state between runs** — not an error;
   the `ExitCode` column is the last run's result (*observed 2026-10-01*: scrontab entries showing
   `REQUEUED 1:0`, and `REQUEUED 0:125` with the `.batch` step `OUT_OF_MEMORY`).
 - `scontrol release` / plain `scancel` do not work on scrontab jobs; `scancel --cron` DISABLES the entry.
-  To un-stick a held entry, reinstall the scrontab (see `homolog-pipeline-guide.md` "Cron stuck held").
+- **Stuck held** — `squeue -u $USER --qos=cron` shows reason `(user env retrieval failed requeued held)`:
+  - `scontrol release <id>` fails (`Cannot modify scrontab jobs through scontrol`).
+  - `scancel <id>` fails (`Cannot cancel scrontab jobs without --cron flag`); `scancel --cron <id>` works
+    but DISABLES the entry (prefixes it with `#DISABLED:`).
+  - Fix: reinstall the scrontab, which recreates every entry as a fresh PENDING job:
+    ```bash
+    scrontab -l > $SCRATCH/scrontab_reinstall.txt
+    # remove any '#DISABLED:' prefixes left by scancel --cron, then:
+    scrontab $SCRATCH/scrontab_reinstall.txt
+    ```
+    If an entry goes back to held on its next run, the cause is persistent — open a NERSC ticket.
 
 ---
 
@@ -149,8 +180,8 @@ scontrol show job $JOB                            # full detail while queued/run
 2. **The job's own completion artifacts.** A `DONE` sentinel written as the script's last action after
    the integrity gate, and an `RC` file with `rc=0`, each created via temp file + `mv`.
    - **Check freshness**: the sentinel's job ID matches `$JOB` and its mtime is after the job's start.
-     A sentinel from an earlier run means nothing (same failure mode as the stale JAWS refdata
-     `.complete` in `jaws-guide.md`).
+     A sentinel or status file older than this run is from a previous run and means nothing — stale
+     "success" markers have hidden real failures for months.
    - A **missing** RC file after the job left the queue = killed hard (SIGKILL from OOM, or after
      timeout's 30 s KillWait — no trap runs). Treat it as failure, never as "probably fine."
 3. **Logs are clean.** Read the job log AND every per-node/per-task log for: `Traceback`, `Error`,
