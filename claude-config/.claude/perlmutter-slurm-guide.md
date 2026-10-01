@@ -4,9 +4,9 @@ For any agent that launches compute work on NERSC Perlmutter. Companion guides:
 `salloc-screen-guide.md` (detached interactive jobs), `jaws-guide.md` (JAWS/Cromwell — a different
 submission path), `es-fast-build-guide.md` (multi-node srun lessons), `pipeline-lock-guide.md`
 (cross-host mutual exclusion). **dori is a separate cluster with different rules** — for dori jobs
-(including submitting to dori from Perlmutter) read `~/git/dori-tools/claude-config/.claude/dori-slurm-guide.md`.
+(including submitting to dori from Perlmutter) read `dori-slurm-guide.md` in the **dori-tools** repo.
 
-Facts marked *(verified 2026-10-01)* were checked from login09 with the command shown. Re-verify
+Facts marked *(verified 2026-10-01)* were checked on a Perlmutter login node with the command shown. Re-verify
 limits with the same command before relying on them — QOS tables change.
 
 ---
@@ -35,10 +35,11 @@ limits with the same command before relying on them — QOS tables change.
 
 ## 1. Accounts, constraint, QOS
 
-- Account: **`-A m342`** (`sacctmgr -nP show assoc user=$USER format=account,qos`).
+- Account: **`-A <project>`** = your NERSC project (allocation). List the ones you can charge, and the QOS
+  each allows: `sacctmgr -nP show assoc user=$USER format=account,qos`.
 - **`-C cpu` is MANDATORY.** Without it `sbatch` fails with
   `Job request does not match any supported policy` (*verified 2026-10-01*:
-  `sbatch --test-only -A m342 -q regular -t 1 --wrap true` → rejected; same with `-C cpu` → accepted;
+  `sbatch --test-only -A <project> -q regular -t 1 --wrap true` → rejected; same with `-C cpu` → accepted;
   `debug` behaves the same).
 - CPU node = 128 cores / 256 hardware threads; `--exclusive` gives the whole node.
 
@@ -61,7 +62,7 @@ Cluster config *(verified 2026-10-01, `scontrol show config`)*: `MinJobAge=300 s
 
 ## 2. Environment
 
-- Output, logs, temp: **`$SCRATCH`** (`/pscratch/sd/p/phillips`). **Never `/tmp`.** `$TMPDIR` is NOT node-local.
+- Output, logs, temp: **`$SCRATCH`** (your pscratch directory). **Never `/tmp`.** `$TMPDIR` is NOT node-local.
 - Containers: Shifter, image by full digest only (`image@sha256:<64 hex>`), pre-pulled and READY
   (`shifterimg images | grep <short digest>`).
 - `module load X && cmd` in the SAME command/script line (each agent Bash call is a fresh shell).
@@ -73,16 +74,14 @@ Cluster config *(verified 2026-10-01, `scontrol show config`)*: `MinJobAge=300 s
 **Batch job** (`job.sbatch`):
 ```bash
 #!/bin/bash
-#SBATCH -A m342
 #SBATCH -C cpu
 #SBATCH -q shared            # or regular/debug — right-size!
 #SBATCH -c 4
 #SBATCH --mem=8G
 #SBATCH -t 00:45:00
 #SBATCH -J myjob
-#SBATCH -o /pscratch/sd/p/phillips/myjob/logs/%x_%j.out   # %x=name %j=jobid → one file per job
 set -euo pipefail
-OUT=/pscratch/sd/p/phillips/myjob/out_$SLURM_JOB_ID
+OUT=$SCRATCH/myjob/out_$SLURM_JOB_ID
 mkdir -p "$OUT"
 echo "Running on $(hostname) at $(date) PID=$$ JOB=$SLURM_JOB_ID NODES=$SLURM_JOB_NODELIST"
 trap 'rc=$?; echo "rc=$rc job=$SLURM_JOB_ID end=$(date -Is)" > "$OUT/RC.tmp" && mv "$OUT/RC.tmp" "$OUT/RC"' EXIT
@@ -90,11 +89,13 @@ module load python && python3 -u /path/to/work.py --out "$OUT/result.tsv"
 python3 -u /path/to/verify.py "$OUT/result.tsv"      # integrity gate: exact expected counts; exits non-zero on mismatch
 echo "job=$SLURM_JOB_ID ok $(date -Is)" > "$OUT/DONE.tmp" && mv "$OUT/DONE.tmp" "$OUT/DONE"   # LAST line, only after the gate
 ```
-The `-o` log directory must exist before `sbatch` (SLURM does not create it).
-
+`#SBATCH` lines are not shell-expanded, so pass the account and the log path (which use per-user values)
+on the command line. The log directory must exist before `sbatch` (SLURM does not create it).
 Submit and capture the ID (record it in a log/notes file, not only in the conversation):
 ```bash
-JOB=$(sbatch --parsable job.sbatch); echo "submitted $JOB"
+mkdir -p "$SCRATCH/myjob/logs"
+JOB=$(sbatch --parsable -A <project> -o "$SCRATCH/myjob/logs/%x_%j.out" job.sbatch)   # %x=name %j=jobid
+echo "submitted $JOB"
 ```
 - Dependencies: `sbatch --parsable --dependency=afterok:$JOB next.sbatch` (afterok = only if exit 0).
 - Arrays: `--array=0-99%20` (`%20` = max concurrent); each task writes its own `part_$SLURM_ARRAY_TASK_ID`.
@@ -106,8 +107,8 @@ JOB=$(sbatch --parsable job.sbatch); echo "submitted $JOB"
 
 ## 4. scrontab (Perlmutter cron)
 - Entries run as `cron`-QOS jobs. **`REQUEUED` is their normal state between runs** — not an error;
-  the `ExitCode` column is the last run's result (*observed 2026-10-01*: `run_blast_cron.sh` REQUEUED 1:0;
-  `run_homolog_cron.sh` REQUEUED 0:125 with its `.batch` step OUT_OF_MEMORY).
+  the `ExitCode` column is the last run's result (*observed 2026-10-01*: scrontab entries showing
+  `REQUEUED 1:0`, and `REQUEUED 0:125` with the `.batch` step `OUT_OF_MEMORY`).
 - `scontrol release` / plain `scancel` do not work on scrontab jobs; `scancel --cron` DISABLES the entry.
   To un-stick a held entry, reinstall the scrontab (see `homolog-pipeline-guide.md` "Cron stuck held").
 
@@ -139,10 +140,10 @@ scontrol show job $JOB                            # full detail while queued/run
 1. **SLURM accounting, including steps.**
    `sacct -j $JOB -P --format=JobID,State,ExitCode` (WITHOUT `-X`, so `.batch`/`.extern`/`.N` steps show).
    - Allocation `COMPLETED` with `ExitCode 0:0` AND every step `COMPLETED 0:0`.
-   - **`ExitCode 0:0` alone proves nothing**: TIMEOUT jobs show `0:0` (*observed*: 58822663/58822664
-     `TIMEOUT 0:0`, Elapsed 04:00:28 vs Timelimit 04:00:00).
-   - **The allocation line can hide a failed step**: *observed* 58326316 allocation `REQUEUED` while
-     `58326316.batch` was `OUT_OF_MEMORY 0:125`. Always read the step lines.
+   - **`ExitCode 0:0` alone proves nothing**: TIMEOUT jobs show `0:0` (*observed 2026-10-01*: two
+     `interactive` jobs `TIMEOUT 0:0`, Elapsed 04:00:28 vs Timelimit 04:00:00).
+   - **The allocation line can hide a failed step**: *observed 2026-10-01*: a scrontab job's allocation line
+     read `REQUEUED` while its `<id>.batch` step was `OUT_OF_MEMORY 0:125`. Always read the step lines.
    - ExitCode is `rc:signal`. A batch script's exit status is its LAST command's — use `set -euo pipefail`
      so an earlier failure is not masked by a final `echo`.
 2. **The job's own completion artifacts.** A `DONE` sentinel written as the script's last action after
