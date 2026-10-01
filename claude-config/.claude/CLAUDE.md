@@ -217,6 +217,8 @@ If one is ever committed, it is an incident — remediate immediately and comple
 
 **If the user asks about releasing a proteome end-to-end (what's needed to get a genome onto dev/prod), read `~/.claude/phytozome-release-guide.md` for the full checklist.**
 
+**If the task involves submitting/monitoring SLURM jobs on Perlmutter (sbatch, squeue, sacct, arrays, dependencies, scrontab) or deciding whether a job truly finished, read `~/.claude/perlmutter-slurm-guide.md` before proceeding.** For jobs on dori (including submitting to dori from Perlmutter), read `~/git/dori-tools/claude-config/.claude/dori-slurm-guide.md` instead — dori has different QOS, paths and limits.
+
 **If the task involves salloc, interactive compute nodes, holding/keeping an interactive allocation alive, or running work on a compute node (e.g. needing more memory than the login-node per-user cgroup cap), read `~/.claude/salloc-screen-guide.md` before proceeding.** A bare `salloc` in a detached screen exits and releases the node — the allocation only stays alive while a foreground command (`salloc … srun <command>`) occupies it.
 
 **ABSOLUTE RULE: `module load` and the command that needs it MUST be in the SAME Bash tool call — chained with `&&`. This has been botched MANY times; do not do it again.**
