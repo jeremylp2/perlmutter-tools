@@ -11,9 +11,21 @@ limits with the same command before relying on them — QOS tables change.
 
 ## 0. The non-negotiables
 
-1. **Overlap check before launch.** Read the recorded log(s) of earlier runs of the same work
-   (`Running on <host> … PID=… JOB=…` line), then `squeue -u $USER`, and `kill -0`/`screen -ls` on the
-   *recorded* login node. Anything alive → STOP. Never launch "just in case".
+1. **Overlap check before launch — is this work already in SLURM?** The cluster's queue is the source
+   of truth for jobs; a login-node `ps`/`screen -ls` cannot see them.
+   - Give every kind of work a distinctive job name (`-J liftoff_A_vs_B`, not `-J job`) so it can be found exactly.
+   - **Queued or running:** `squeue -u $USER --name=<name> -h -o '%i %j %T %M %R'` — anything listed,
+     PENDING included → STOP. `--name` is an exact match *(verified 2026-10-01)*.
+   - **Recently ended:** `sacct -u $USER --name=<name> -S <date before the last run> -X -P --format=JobID,State,Start,End`.
+     `-S` returns only jobs from that time on (*verified*: a job that ran 2026-09-24 was missing with
+     `-S 2026-09-25`). A previous run that finished or died may have left full or partial outputs — check
+     them before deciding to rerun. Perlmutter `sacct` limits the window (30 days back accepted, 61 rejected).
+   - **Recurring:** `scrontab -l` — is a cron entry already doing this work? scrontab jobs appear in
+     `squeue` under their full command path as the job name *(observed 2026-10-01)*.
+   - **Only if a controller runs on a login node** (a `screen` holding a `salloc`, or a loop that submits or
+     monitors jobs): also check that process on the login node recorded in its log's first line
+     (`ssh <node> screen -ls`, `ssh <node> kill -0 <PID>`). Such a loop is invisible to `squeue` until it submits.
+   - Anything found → STOP. Never launch "just in case".
 2. **One item first.** Run a single file/proteome/shard, time it, verify its output, then the batch.
 3. **Right-size every job** from what THIS job needs (state the reasoning: cores, GB, minutes).
    Never copy `#SBATCH` lines from another job. Oversized walltime/`--exclusive` kills backfill.
