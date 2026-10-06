@@ -30,7 +30,8 @@ bash ~/git/deploy_config_metadata/bin/update_njphytozome.sh <deploy_tag>
 
 ## Branches & pushing (zome-clientside)
 
-- **dev = `trunk`**, **prod = `production-14.0`**. `production-14.0` is DIRECTLY edited, not merged from trunk.
+- **dev = `trunk`**, **prod = a `production-14.x` branch** (was `production-14.0`; **live prod was `production-14.1` @ 2026-09-21** — the number rolls, so ALWAYS confirm the live prod branch from the SPA shell trailing comment `curl -sS https://phytozome-next.jgi.doe.gov/info/<pid> | tail -12` before editing). The prod branch is DIRECTLY edited, not merged from trunk.
+- **Frontend pickup is the SAME for prod as dev** (see `zome-clientside-dev-deploy-guide.md`): a builder rebuilds from the tracked branch and serves it — so **pushing `njphytozome.json` to the live prod branch is all that's needed to make it go live** (prod builder is off-SPIN/IGB, not the SPIN `plant` one, but "prod is not different" — no separate deploy step). Dev builder tracks `trunk`; prod builder tracks the `production-14.x` branch.
 - To push trunk's njphytozome.json to prod, either regenerate on the production-14.0 branch from the prod deploy, OR cherry-pick the file:
   ```bash
   cd ~/git/zome-clientside
@@ -40,6 +41,16 @@ bash ~/git/deploy_config_metadata/bin/update_njphytozome.sh <deploy_tag>
   git push origin production-14.0
   ```
 - Commit messages: short, e.g. `Add 962, 1053, 1054 to production` / `dev: add 962, 988, 1053, 1054`. No co-author line.
+
+### VERIFIED prod-release recipe (2026-09-21, in-place — matches how dev is done)
+Instead of cloning a new deploy, you can **add proteomes in place to the LIVE prod deploy** (the one `current_release` env4 points at) — this is what dev does to its live deploy, and it needs no `current_release` change:
+1. Confirm the live prod deploy: `current_release` env4 → deploy_id; cross-check the SPA `deployTag`. (2026-09-21: env4=**59** = `phytozome-next_20260909`, live, not stale.)
+2. Add proteomes to that deploy (**the add/create scripts `input()` a `yes/no`; auto-piping `echo yes` may be blocked by the harness "blind apply" guard — the user runs it or grants permission**):
+   `echo yes | <chado-py> ~/git/deploy_config_metadata/bin/add_proteomes_to_deployment.py --deploy-id <live> --input <pid TAB clade>.tsv` (clade e.g. `Brassicales-Malvales`; it walks all ancestors + creates deploy_release rows).
+3. Regenerate on the prod branch: `cd ~/git/zome-clientside && git checkout <production-14.x> && git pull --ff-only` then `bash ~/git/deploy_config_metadata/bin/update_njphytozome.sh <that deploy's tag>`.
+4. **Review the diff (mandatory):** must be **+N proteomeId nodes, 0 removed** (`git diff config/njphytozome.json | grep '^-' | grep -c proteomeId` == 0) and each new node's `dataPolicy` correct (generated from CHADO — flip CHADO first). Then commit + push the prod branch → prod builder picks it up.
+5. `current_release` env4 is unchanged (same deploy). njp_content: copy the proteomes' `viewInfoSection` rows dev→prod. BioMart: rebuild the prod cache (see `biomart-guide.md`).
+- `update_njphytozome.sh` and the deploy scripts need a python with pymysql — use `/global/cfs/cdirs/jgisftwr/plant/zome/conda/envs/chado/bin/python3` (bare `python` is not on PATH).
 
 ## current_release (selecting the active deployment) — direct SQL
 

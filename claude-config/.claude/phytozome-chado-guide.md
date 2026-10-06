@@ -4,6 +4,45 @@ This guide covers the non-obvious CHADO table structure, type IDs, and query pat
 for the Phytozome database as exposed in the JGI community Lakehouse
 (`"plant-db-7 postgresql"`).
 
+## ⛔ NEVER select or compare by organism — ALWAYS scope by proteome
+
+**`WHERE f.organism_id = N` is NEVER a valid scope for a proteome's features, counts,
+loads, or dev-vs-prod comparisons. Scope on the PROTEOME (`PACProteome:<pac_id>`), always.**
+
+One organism can have **many proteomes, many annotations, and even many assemblies**.
+Keying on `organism_id` silently sweeps in features from *other* proteomes/assemblies of
+the same organism, so counts, set-diffs, and residue/coordinate comparisons come out wrong
+(inflated, mismatched, or mixing unrelated data). This is a data-integrity landmine, not a
+style preference.
+
+**Correct, org-free scope chain** (validated on PACProteome:931):
+
+1. `PACProteome:<pac>` is a **secondary** cross-ref (`feature_dbxref`) on the annotation
+   features (gene/mRNA/polypeptide) + the `peptide_collection` + the `genome` feature.
+2. Those features' **primary `feature.dbxref_id`** is the `GFF_source:<file>` **annotation
+   dbxref** — every annotation feature (gene/mRNA/**exon**/polypeptide/peptide_collection)
+   shares it. (Note: exons do NOT get the `PACProteome` secondary xref, so scope the full
+   annotation set by the primary `dbxref_id`, not by the `PACProteome` xref.)
+3. The **assembly** (genome + chromosomes) is a *separate* `FASTA:<file>` dbxref, reached
+   **for this proteome** only via `featureloc.srcfeature` of the proteome's own features —
+   NEVER by grabbing the organism's `genome`/`chromosome` features.
+
+```sql
+-- annotation dbxref(s) for a proteome (resolve independently in each DB — ids differ):
+SELECT DISTINCT f.dbxref_id
+  FROM feature f
+  JOIN feature_dbxref fdx ON fdx.feature_id = f.feature_id
+  JOIN dbxref dx ON dx.dbxref_id = fdx.dbxref_id
+  JOIN db    ON db.db_id = dx.db_id
+ WHERE db.name = 'PACProteome' AND dx.accession = '<pac>' AND f.dbxref_id IS NOT NULL;
+-- -> returns the FASTA (assembly) dbxref AND the GFF_source (annotation) dbxref.
+-- annotation features: WHERE f.dbxref_id = <that GFF_source dbxref>
+-- assembly features:   the shared dbxref of DISTINCT featureloc.srcfeature of those features
+```
+
+If that query returns **more than one** GFF_source dbxref for a proteome, that's a real
+finding (multiple annotation loads) — report it, don't assume it's benign.
+
 ## Schema Layout
 
 The analytics/pre-joined schemas are confirmed:
@@ -140,6 +179,45 @@ Per-gene expression vectors for scRNA.
 - `name` — gene name
 - `experiment_set_id` — FK
 - `bit_vector`, `expression_vector_gz` — gzip-compressed float array aligned to `cell.cell_order`
+
+## CHADO load inputs: FASTA is a tracked file, GFF is REGENERATED from PAC2_0
+
+The two load inputs come from **different sources** — a frequent source of confusion when a
+dev load's GFF md5 doesn't match prod's:
+
+| input | how the load gets it | source of truth |
+|-------|----------------------|-----------------|
+| **FASTA** | `getReferenceGenomeFile.pl <pac>` → looks up the **tracking data** and returns the path to the **actual archived genome file** | the tracked/archived file (identical bytes across dev/prod if tracking was cloned) |
+| **GFF** | `exportGffFromPAC.pl … PAC2_0 <pac> <abbrev>_<pac>` → **regenerates** GFF text from the **PAC2_0 database** | PAC2_0 — **there is no stored/tracked GFF file at all** |
+
+So a dev-vs-prod **GFF md5 difference is expected and usually benign**: the GFF is rebuilt
+from PAC2_0 each run, and `exportGffFromPAC.pl` writes the `<abbrev>_<pac>` string into
+**column 2 (the "source" field) of every feature line**. A different `<abbrev>` → every line
+differs → different md5, but the gene models (IDs, coords, pacids) are identical. **Both
+`load_gff.py` and `loadGFF.pl` DISCARD column 2** (it never enters CHADO), so this md5 diff
+does not affect loaded data. To prove equality, compare feature-level outcomes (counts,
+`featureloc` coords, polypeptide residue md5s, relationships), not the GFF file bytes.
+
+### The three-abbreviation quirk (don't mistake it for a bug)
+
+Three *different* abbreviation strings coexist for one organism; only one reaches loaded data:
+
+1. **`organism.abbreviation`** (CHADO `organism` row) — e.g. `A.triloba_var._Atwood_HAP2`.
+   `load_gff.py`/`loadFasta.pl` use THIS (via `resolve_organism`) for the `peptide_collection`
+   and `genome`/`chromosome` **feature names**. Cloned identically dev↔prod → loaded names match.
+2. **unpack_json's computed abbrev** — e.g. `Atrilobavar_AtwoodHAP2`. Computed *from the
+   organism name string* by an inline python in the `unpack_json` WDL task
+   (`(words[0][0] + ''.join(words[1:])).replace("'","").replace(".","_")`). Used **only** for the
+   regenerated GFF's filename + column-2 label. **Discarded on load.**
+3. **The GFF_source accession stored at the original prod load** — e.g. `AtrilobavarAtwoodHAP2`.
+   Reflects the unpack_json code *as it was when prod loaded that proteome*. The `.`-handling
+   changed over time (older: delete the `.`; now: `.`→`_`), so #2 and #3 differ across code
+   versions even though the organism string is unchanged.
+
+Bottom line: a mismatch between these abbreviations is a **code-version artifact in a discarded
+GFF label**, not a loaded-data bug. Verify by checking `organism.abbreviation` and the
+`peptide_collection`/`genome` feature names are identical dev↔prod (they will be if CHADO was
+cloned) — using the proteome-scoped queries in the "NEVER select by organism" section above.
 
 ## PAC ID Handling
 

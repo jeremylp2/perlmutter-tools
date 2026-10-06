@@ -232,23 +232,58 @@ File ref_db = "/refdata/phytzm/hmm"
 ```
 
 **Refdata paths by project (host filesystem → container mount):**
-| Project | Host path | Container mount |
-|---|---|---|
-| JGI/phytzm | `/global/dna/shared/databases/jaws/refdata/<group>/` | `/refdata/<group>/` |
-| NMDC | `/global/cfs/cdirs/m3408/refdata/<group>/` | `/refdata/<group>/` |
+| Project | Base path `<REFDATA>` | Container mount | **Linux group** | Syncs to |
+|---|---|---|---|---|
+| JGI | `/global/dna/shared/databases/jaws/refdata` | `/refdata/<group>/` | **`genome`** | tahoma, dori, jgi, crux, defiant |
+| NMDC | `/global/cfs/cdirs/m3408/refdata` | `/refdata/<group>/` | `m3408` | nmdc_tahoma |
+| KBase | `/global/dna/kbase/reference/jaws` | `/refdata/<group>/` | `kbase` | jgi |
 
-**Adding data to refdata** (sync takes ~20 min):
+### 🚨 THE TWO THINGS THAT SILENTLY BREAK REFDATA
+
+**1. WRONG LINUX GROUP — fails silently, with NO error anywhere.**
+The manifest daemon VALIDATES that every listed path is readable by the JAWS service account
+BEFORE submitting to Globus. If it is not, the daemon writes **no status file at all** — no
+`.complete` and **no `.failed`** — so JAWS support is never alerted either. The files sit there
+looking perfect and simply never sync. The WDL then dies in seconds with
+`FATAL: missing /refdata/... in refdata`.
+**Mode `440` alone is NOT enough.** Files owned `user:user` with mode 440 are unreadable by the
+`jaws` account. The **group must be `genome`** (JGI).
+
+**2. The manifest lives in the `<REFDATA>` ROOT — NOT in your group directory.**
+(An earlier revision of this guide said the group dir. That was WRONG and cost a lost workflow.)
+
+### Adding data to refdata
 ```bash
-# SSH to a DTN node (compute nodes have read-only access to refdata)
-ssh dtn01.nersc.gov
-mkdir -p /global/dna/shared/databases/jaws/refdata/<group>/mydata
-chmod 440 /global/dna/shared/databases/jaws/refdata/<group>/mydata/*
-# Create manifest listing new files (one absolute path per line):
-echo "/global/dna/shared/databases/jaws/refdata/<group>/mydata/file.fa" \
-    >> /global/dna/shared/databases/jaws/refdata/<group>/<username>_changes.txt
-# Background daemon checks every 20 min and submits Globus transfer
+# DTN ONLY — refdata is READ-ONLY on login and compute nodes
+ssh dtn01.nersc.gov          # dtn0[1-4]
+
+D=/global/dna/shared/databases/jaws/refdata/<group>/mydata
+mkdir -p "$D"
+cp ... "$D"/                 # NEVER symlink — symlinks do not sync
+
+chgrp -R genome "$D"         # <-- THE STEP EVERYONE FORGETS. Required.
+chmod 550 "$D"               # directories 550
+chmod 440 "$D"/*             # files 440
+
+# Manifest goes in the REFDATA ROOT, named <USERNAME>_changes.txt.
+# A DIRECTORY path syncs recursively — prefer it to listing every file.
+echo "/global/dna/shared/databases/jaws/refdata/<group>/mydata/" \
+    > /global/dna/shared/databases/jaws/refdata/<USERNAME>_changes.txt
 ```
-Deletions propagate only during monthly full sync.
+
+### ✅ VERIFY IT ACTUALLY SYNCED — before submitting any workflow
+```bash
+R=/global/dna/shared/databases/jaws/refdata
+stat -c '%n group=%G mode=%a' $R/<group>/mydata $R/<group>/mydata/*    # group MUST be genome
+ls -la $R/log/<USERNAME>_changes.txt_<SITE>.complete                   # .complete / .failed
+```
+**⚠️ COMPARE THE DATES.** A `.complete` OLDER than your manifest is from a previous sync and means
+nothing. Real case (2026-07): `phillips_changes.txt_dori.complete` was dated **Mar 23** while the
+manifest was **Jul 20** — the daemon had never run, because the files were group `phillips` instead
+of `genome`. Four months of stale "success" made it look fine, and a Pfam refresh died on it.
+
+Daemon scans every 20 min, then Globus transfers. Deletions propagate only on the MONTHLY full sync.
+Best practice: clear the manifest after a successful sync so old paths are not re-validated.
 
 ---
 

@@ -102,3 +102,53 @@ Note `annotation_version` from the API already has a leading `v` — don't add a
 - Chado GFF export needs `module load python` **then** `conda activate chado`.
 - Browser pages can't be fetched by Claude (`WebFetch` of phytozome 403s from Anthropic IPs) —
   ask the user to eyeball the browser, and tell them to hard-reload (track data is cached).
+
+## Liftoff ("Mapped Models from X") tracks — refactored pipeline (2026-08)
+Code: `/pscratch/sd/p/phillips/liftoff/` (scratch, not yet in git; old copies in
+`~/git/compgen/analysis/liftoff` use the obsolete tarball input).
+- WDL `liftoff_and_track.wdl` → `liftoff.wdl` + `makeLiftoffTrack.wdl`. Input `File target_tracklist`
+  (the target browser's live trackList.json) — NO browser tarball. `updateTrackList` image pinned
+  `python@sha256:7b72fe8ab313d9b48755f1350fa2a42c723a80e6bf7beb5e03b801e5405ecb15`.
+- `configLiftoffWDL.py <pid1> <pid2> --trackInput <abs path> --cpu N` (login node): picks the LAST
+  non-PURGED JAMO genome + gene_exon annotation, `jamo fetch`+cp into the pair dir, copies each target's
+  trackList.json from /global/dna into the pair dir, writes both `*_vs_*.json` configs. `--trackInput`
+  must be ABSOLUTE (script chdirs into the pair dir).
+- Submit: `prepare_multiple_jaws.py --input_pairs pairs.tsv --workdir W --script_root <liftoff dir>
+  --cluster dori --cpu 4 --output_file runs.txt` (one line per unordered pair; submits both directions).
+  4 cpu is plenty (lift ≈ 4 min at 32 cpu); big cpu requests sit in queue for hours.
+- Deploy: `deploy_liftoff_dna.py runs.txt [--dry-run] --stamp $(date +%Y%m%d_%H%M%S)` — reads
+  `jaws status` output_dir/outputs.json, live-merges only the new `Mapped*` entry into the CURRENT dna
+  trackList (safe for many tracks → same browser), scp via dtn01, wwwzome/a+r, verifies by direct read.
+  Run in screen; python stdout is buffered (use `python3 -u`), so judge progress by dna track counts.
+- Liftoff data dir naming: label `Mapped_Models_from_<queryShort>`, key `Mapped Models from <queryShort>`.
+
+## JAWS site notes (observed 2026-08)
+`jaws list-sites` shows only static caps. Judge real scheduling with `jaws tasks <id>` (QUEUE_START→RUN_START)
+and `jaws log <id>`; top-line `done` can be a staging failure. jgi = Lawrencium (fast queue; occasional
+transient image-pull flake → consider `maxRetries`). defiant = OLCF (Globus endpoint was down). crux
+submissions were disabled by the JAWS team.
+
+## Building a browser whose source data is only on dori
+Tracking may point at `/clusterfs/...` (dori), unreadable from Perlmutter. scp the genome / RM / gaps /
+bigwig from dori (see dori-guide.md; key `~/.ssh/dori`, MaxSessions 1 → sequential) into a scratch
+staging dir with the SAME filenames, then run build_jbrowse.sh with `OVERRIDE_SRC_DIR=<staging>`
+(override block redirects GENOME/REPEATS/GAPS/BIGWIG dirs; was in `build_jbrowse_dori.sh` copy as of
+2026-09 — check whether folded into build_jbrowse.sh).
+
+## build_jbrowse.sh operational notes
+- `MINIPROT_TIME` env overrides miniprot sbatch walltime (default 0:20:00). miniprot runs ~1–3 min on
+  ~1 Gb genomes; oversized walltime on `--exclusive` jobs badly hurts backfill. A pending job's walltime
+  can be cut in place: `scontrol update jobid=<id> TimeLimit=00:20:00` (keeps job id → batch waits intact).
+- Never edit build_jbrowse.sh while any build using it is running (bash reads scripts incrementally).
+- get_extra_gff_meta.py emits 7 TAB fields (path,file,label,glyph,category,transcriptType,subParts);
+  build_jbrowse.sh must take them by index.
+- deploy_one.sh → mark_jbrowse_deployed.py needs `pymysql`. NERSC user-site is per python BUILD
+  (`~/.local/perlmutter/python-3.13/<build>/`); when the default `python` module build changes, pymysql
+  vanishes → deploy_one exits 1 AFTER scp+verify → batch skips update_fulldataset. Fix:
+  `module load python && pip install --user pymysql`, then run update_fulldataset.py / mark manually.
+
+## RNA-coverage bigwig audit
+For every trackList track with BigWig storeClass or `.bw` urlTemplate: file must exist, start with
+bigWig magic `26fc8f88`, be world-readable, parent dir o+rx. Missing files: source path is in Chado
+tracking (`filetype='bigwig'`, subtype RNAseqExpression) — copy via dtn01 into `custom/expression/` with
+the trackList's filename. (2026-08: 3 missing + 1 unreadable found and fixed.)

@@ -1,5 +1,41 @@
 # Global Claude Code Notes
 
+## ⛔ RULE ZERO — NEVER `pkill -f` / `pgrep -f` / `killall`. EVER. KILL ONLY BY A RECORDED PID. ⛔
+
+**This has killed Claude's own shell more times than the user can count. The user is furious about it. It ends now.**
+
+- **`pkill -f`, `pgrep -f`, `killall`, and `ps | grep | xargs kill` are BANNED outright — in every command, for every purpose:
+  cleanup, launch guards, poll loops, "just killing my tunnels", everything.** No pattern is "safe": the Bash tool runs the
+  whole command line inside a `bash -c '<your entire command>'` wrapper, so ANY pattern you write also appears in that
+  wrapper's own command line — and in the command lines of anything else you launched from it — and matches ITSELF.
+  The bracket trick (`[p]attern`) does NOT save you when the same command also launched something containing the text.
+  (2026-09-23: `pkill -f "port-forward.*932[12]:"` matched its own shell because the same command had launched
+  `kubectl port-forward … 9322:8096` → exit 144, shell killed. Same failure, again, after a rule already existed.)
+- **The ONLY allowed way to stop a process:** capture its PID at launch and kill that exact PID.
+  - Background launch in the same command: `cmd & PID=$!; …; kill "$PID"`
+  - Across tool calls / screens: the process writes `PID=$$` to line 1 of its log (already mandatory); later:
+    `pid=$(grep -o 'PID=[0-9]*' LOG | head -1 | cut -d= -f2); kill -0 "$pid" && kill "$pid"`
+  - Or `echo $! > /path/x.pid` at launch, then `kill "$(cat /path/x.pid)"`.
+- **The ONLY allowed way to check if something runs:** `kill -0 <recorded PID>`, a log line, an rc/output file, or
+  `ps -o pid,args -p <recorded PID>`. Listing with `ps -u $USER -o pid,args` and READING it is fine; piping that into
+  kill is not.
+- Before sending ANY Bash command, scan it for `pkill`, `pgrep -f`, `killall`, `xargs kill`. If present: STOP and rewrite
+  to kill-by-recorded-PID. Treat it exactly like a credential in a command line.
+
+## ⛔ ABSOLUTE RULE: NEVER have more than one process write to the same file. EVER. ⛔
+
+**Every file has exactly ONE writer. Not logs, not manifests, not status/progress files, not "just appends".** The ONLY exception (user, 2026-09-23): a log manager / intermediary process built to take several streams and write them itself (e.g. syslog, SLURM's own job-output forwarding) — it is then the single writer. Never several processes writing the same file directly at the same time.
+(2026-09-23: 12 nodes x 8 loader processes appended to ONE manifest file on NFS -> lines lost/corrupted -> false gate failure;
+then a "repair" watcher replaced that file under the writers -> `Stale file handle` -> loaders crashed -> multi-node ES build destroyed.
+Twice. The user: "no simultaneous parallel writes to the same file. no more. none. not now, not ever.")
+- Parallel workers each write THEIR OWN file (per worker / per input / per node), written to a temp name and renamed into place.
+  Aggregate by READING all the per-worker files afterwards — never by appending to a shared one.
+- Multi-node jobs: each node's output goes to its OWN log file (`cmd > $LOGDIR/$SLURMD_NODENAME.log`), never only the merged
+  srun/job stdout; decisions (gates, counts, success checks) must never parse a merged multi-writer log.
+- Never replace, truncate, rename or rewrite a file another process has open or may write. Never "repair" a live file.
+- O_APPEND is NOT safe across NFS clients (GPFS/Lustre/VAST/CFS/pscratch). Treat any shared-file append as corruption.
+- Before launching ANY parallel job, list every file each process writes and prove each path has exactly one writer.
+
 ## ABSOLUTE RULE: All guides, skills, and scripts go in the stow repo
 
 **Never write `.md` files, skills (`SKILL.md`), or scripts (`.sh`, `.R`, `.py`) directly to `~/.claude/`.** Those files are symlinks managed by GNU Stow. The source of truth is `~/gh/perlmutter-tools/`.
@@ -42,9 +78,14 @@ After any change to `njp_content` or `njp_content_dev`, always fetch the live pa
 
 ## ABSOLUTE RULE: NEVER commit handoff, session, or operational docs to git
 
-**THIS IS A CARDINAL SIN, ON EXACTLY THE SAME LEVEL AS COMMITTING PLAINTEXT PASSWORDS OR PRIVATE KEYS. IT IS AN INCIDENT. THERE IS NO EXCEPTION, NO CIRCUMSTANCE, NO "JUST THIS ONCE," AND NO AMOUNT OF USEFULNESS THAT MAKES IT ACCEPTABLE.**
+**IN A PROJECT REPO THIS IS A CARDINAL SIN, ON EXACTLY THE SAME LEVEL AS COMMITTING PLAINTEXT PASSWORDS OR PRIVATE KEYS. IT IS AN INCIDENT. FOR PROJECT REPOS THERE IS NO EXCEPTION, NO CIRCUMSTANCE, NO "JUST THIS ONCE," AND NO AMOUNT OF USEFULNESS THAT MAKES IT ACCEPTABLE.**
 
-**NEVER, EVER, EVER commit a document written for Claude, by Claude, or to hand state between Claude sessions. Not to any branch. Not to any repo. Not ever.**
+**NEVER, EVER, EVER commit a document written for Claude, by Claude, or to hand state between Claude sessions to a PROJECT repo (GitLab code.jgi.doe.gov repos, `~/git/*`, any codebase). Not to any branch. Not ever.**
+
+**The ONE exception — the stow repo is Claude's own data repo:** `~/gh/perlmutter-tools` (GitHub, `claude-config/.claude/`) exists
+to hold Claude data. **Plan docs belong there and are expected there:** `claude-config/.claude/plans/<name>.md` (symlinked as
+`~/.claude/plans/`; the protect-claude-config hook redirects plan writes to it). Write plan files there without hesitation. This
+exception is for the stow repo ONLY — never put plan docs (or any session doc) in a GitLab/project repo.
 
 Forbidden from git, always — regardless of filename, extension, or directory:
 - Handoff docs, compaction/self-handoff docs, Claude-to-Claude notes, session logs, session summaries.
@@ -53,9 +94,10 @@ Forbidden from git, always — regardless of filename, extension, or directory:
 - Anything whose audience is a future agent or a future session rather than a developer reading the codebase.
 - Files named like `*HANDOFF*`, `*SESSION*`, `*_LOG.md`, `*COMPACT*`, `*PRELOAD*`, `*STATUS*`, `NOTES.md`, `*_GUIDE.md` written for this purpose, and any `README`-ish file that is really a session narrative.
 
-Where these go instead — ALWAYS outside any git working tree:
-- `$SCRATCH` (Perlmutter), or a non-repo shared path (e.g. `/clusterfs/jgi/groups/science/wcplant/phillips/` on dori).
-- NEVER inside a repo checkout, not even untracked — an untracked doc in the tree is one careless `git add -A` away from being committed.
+Where these go instead — ALWAYS outside any PROJECT repo working tree:
+- Plan docs: the stow repo `~/gh/perlmutter-tools/claude-config/.claude/plans/` (see exception above).
+- Handoffs / session docs: `$SCRATCH` (Perlmutter), `$HOME`, or a non-repo shared path (e.g. `/clusterfs/jgi/groups/science/wcplant/phillips/` on dori).
+- NEVER inside a project repo checkout, not even untracked — an untracked doc in the tree is one careless `git add -A` away from being committed.
 
 Rules of engagement:
 - **Before every `git add` / `git commit`**: check every staged path. If ANY of it is a doc written for a Claude session, STOP and remove it. This check is mandatory and ranks with the credentials check.
@@ -70,6 +112,23 @@ If one is ever committed, it is an incident — remediate immediately and comple
 4. Purge local objects: `git reflog expire --expire=now --expire-unreachable=now <affected reflogs>` then `git gc --prune=now`. Verify with `git cat-file -e <old-sha>` — it must be gone.
 5. Do the same on EVERY other checkout of that branch (other hosts, other worktrees): `git fetch` + `git reset --hard`, delete the file, expire reflogs, gc.
 6. Tell the user the remote host may still retain the orphaned object internally until server-side housekeeping runs, and that it can remain reachable by raw SHA in the web UI until then.
+
+## ⛔ ABSOLUTE RULE: NEVER commit or push unless the user said so FOR THAT STEP ⛔
+
+**The user has asked for this over and over and is furious that it keeps happening. No commits after each change. No
+"helpful" pushes. Ever.**
+- `git commit`, `git push` (any branch), `git cherry-pick`, `git revert`, `git merge`, `git commit --amend` all publish or
+  create commits — each is FORBIDDEN unless the user's latest instructions explicitly asked for THAT exact step.
+- Default after any edit: leave it **uncommitted**, tell the user exactly what changed, and **WAIT**. Many edits → still
+  zero commits until "commit". Then ONE commit for the batch (never split it yourself; ask).
+- Never commit/push to *show* work. Show it locally (local dev server, screenshots only if asked).
+- Permission covers only the step named: "push" ≠ "merge to trunk" (that means push the branch + give the MR link);
+  "cherry-pick onto a branch" ≠ push it; "deploy" = commit + push + run the build script, nothing more.
+- `git cherry-pick A B C` makes one commit per source commit — ASK first how the user wants it.
+- Never substitute a different method (copying files, squashing, merging) for the one the user named without asking.
+- Before sending any Bash command, scan it for `commit`, `push`, `cherry-pick`, `revert`, `merge`. If present and not
+  explicitly requested for this step: STOP, say in chat exactly what would be committed/pushed and where, and wait.
+- Narrate every git step before and after. No long silent runs.
 
 ## ABSOLUTE RULE: Commit messages are short, with NO Co-Authored-By trailer
 
@@ -110,15 +169,23 @@ If one is ever committed, it is an incident — remediate immediately and comple
 - "Only N records are affected" is never a justification for silent data loss. Scientific data integrity requires explicit decisions about every value.
 - When handling edge cases (ties, nulls, mixed types), always preserve the maximum information and document what was done.
 
-## ABSOLUTE RULE: Empirical data and facts only — never assume, never guess
+## ⛔ ABSOLUTE RULE: HARD EVIDENCE ONLY — no assumptions, no guesses, no "intelligent guesses", ever ⛔
+
+**Every statement must rest on hard evidence gathered in THIS session. No assumptions. No guesses. No "intelligent guesses," educated inferences, plausible mechanisms, or gap-filling of any kind — ever, in every session, forever. The ONLY exception: the user EXPLICITLY asks for a guess or speculation — then give it, labeled plainly as a guess, and nothing else in the reply may be.** The user has had real trouble getting Claude to follow this; it is the single behavior they most need. Breaking it is not a style slip — it produces wrong answers stated as facts.
+
+- **Show the evidence.** Any conclusion that matters — a date, a count, a cause, "X is live," "X exists / doesn't exist," "which of several things is correct" — is stated TOGETHER WITH the exact command/query/file and the output that established it. If you cannot point to the evidence, you cannot make the claim.
+- **Absence claims are the most dangerous claims.** Never say "there are none," "no such," "nothing in that period," "it doesn't exist." State the exact scope searched — which repo/refs/remotes, tables, paths, date field (commit vs author), method — and say "found none in <that scope>." A local clone, one remote, one table, or one filtered query is never "everything." (2026-09-23: a "no production commits Dec 2023–Sep 2024" claim was false; the commit was in the first query.)
+- **Ambiguous → ASK. Never pick a reading.** If the evidence fits more than one interpretation of the user's question or definition, STOP and ask ONE precise question ("does a trunk commit that is on a production branch count as released?"). Choosing an interpretation yourself and building on it is a guess.
+- **Evidence runs out → say so.** "I don't know; it cannot be determined from <what I checked>; <X> would determine it." Never bridge the gap with reasoning.
 
 **Never make assumptions. Always investigate. Every claim about the state of a file, process, database, run, config, history, or any other determinable thing must be backed by empirical data gathered right now — not memory, not intuition, not "it was like that last time."**
-- Forbidden words and phrases when discussing things that can be determined factually: "probably", "should be", "must be", "likely", "I think", "I believe", "presumably", "seems like", "appears to be", "I'd guess", "my guess is".
+- Forbidden words and phrases when discussing things that can be determined factually: "probably", "should be", "must be", "likely", "I think", "I believe", "presumably", "seems like", "appears to be", "I'd guess", "my guess is", "most likely", "I suspect", "I assume", "assuming", "plausibly", "chances are", "in all likelihood", "almost certainly". A Stop hook scans replies for these and sends the reply back for verification — rewrite the claim as observed evidence (or "I don't know") rather than rephrasing around the hook.
 - Before stating any fact about the system: run the command, read the file, query the DB. State what you actually observed, then draw the conclusion.
 - Before modifying anything (memory, code, config, data) based on a belief: VERIFY the belief is true first. If you catch yourself about to edit something because "I think X is outdated", stop — check X first.
 - If data is incomplete or a lookup returns fewer results than expected (e.g. `r[0]` from an API), check the ordering and scope before drawing conclusions. One result is not "the only result."
 - When you cannot determine something factually (rare): say so explicitly — "I don't know and cannot determine it from here" — rather than guess.
 - This rule applies to every statement in every response, not just failure diagnosis or destructive actions. Hedged language in a routine status report is just as forbidden as in a postmortem.
+- **An unverified model of how a process works IS an assumption** — "releases happen when the branch is cut," "the merge-base is when the branch was created," "the value is the nearest field before the key." Never invent a mechanism and reason from it. If the user states a definition, apply it LITERALLY to the evidence; if the evidence already answers the question, never discard it in favor of a theory. (2026-09-23: the correct production release commit was in the FIRST query; it was thrown away for an invented release-process model, producing wrong dates repeatedly.)
 
 ## ABSOLUTE RULE: Investigate — never assume — when anything dies, hangs, or misbehaves
 
@@ -203,6 +270,8 @@ If one is ever committed, it is an incident — remediate immediately and comple
 
 **If the user asks you to do anything involving podman or Docker image builds on Perlmutter, read `~/.claude/podman-perlmutter-guide.md` before proceeding.**
 
+**If the task involves building, rebuilding or reindexing a large Elasticsearch index (bulk loading millions of docs, multi-node ES on SLURM/dori, snapshot/restore between clusters), read `~/.claude/es-fast-build-guide.md` BEFORE creating the index** — index.sort must match the query sort (incl. tie-break) at creation; never `srun -c 1`; per-node ES_PATH_CONF; RAM-disk data dir; gates before snapshot.
+
 **If the user asks you to do anything involving SPIN, Helm, kubectl, Kubernetes, Rancher, or deploying/running workloads on the NERSC SPIN cluster (namespaces `dsi`/`plant`, `~/.kube/development.yaml`, k8s Jobs, PVCs, ingress, the pfam-universal app or `pfam-es`), read `~/.claude/spin-helm-guide.md` before proceeding.**
 
 **If the user asks you to set up a file watcher / live-reload / hot-reload / auto-rebuild dev loop (vite/webpack/nodemon `--watch`, HMR) where the source is on CFS/GPFS/Lustre/NFS (e.g. a SPIN pod hostPath-mounting a CFS source), read `~/.claude/watchers-gpfs-guide.md` FIRST. Short version: inotify does NOT fire on GPFS/CFS at all — watch a NODE-LOCAL copy and stat-poll the CFS source into it. Do not waste time re-discovering this.**
@@ -210,6 +279,8 @@ If one is ever committed, it is an incident — remediate immediately and comple
 **If the user asks you to do anything involving dori (the JGI cluster / JAWS dori-prod backend, ssh to dori, dori run records, or transferring files to/from dori), read `~/.claude/dori-guide.md` before proceeding.**
 
 **If the user asks you to do anything involving deployments, `njphytozome.json`, `deploy_config_metadata`, `current_release`, or promoting proteomes to dev/prod, read `~/.claude/deploy-config-metadata-guide.md` before proceeding.**
+
+**If the user asks why a released genome isn't showing on the Phytozome DEV frontend, or anything about how the dev SPA is built/served on SPIN (`zome-clientside`, `zome-clientsidebuilder`, `zome-staticserver`, `DEPLOY_BRANCH`, the 10-min supercronic rebuild, the shared `zome-clientside-store` PVC, or `njphytozome.json.tgz` on dev), read `~/.claude/zome-clientside-dev-deploy-guide.md` before proceeding. Baseline: dev MUST track `trunk`; a builder on any other branch is the usual cause of genomes vanishing from dev.**
 
 **If the user asks you to do anything involving restricting/unrestricting a proteome, read `~/.claude/restriction-guide.md` before proceeding.**
 
@@ -339,6 +410,19 @@ manifestations:
 **`$TMPDIR` is NOT node-local on Perlmutter compute nodes.**
 - `$TMPDIR` is on the shared GPFS/Lustre filesystem, counts against inode and storage quotas, and is visible across nodes.
 - Do NOT use it as a local scratch space expecting it to be fast or quota-free.
+
+**ABSOLUTE RULE: Perlmutter login nodes have a HARD 30 GiB per-user memory cap. NEVER run memory-heavy work on a login node.**
+- The cap is a per-user cgroup (`/sys/fs/cgroup/user.slice/user-$(id -u).slice/memory.max` = 32,212,254,720 bytes = 30 GiB).
+  It is the SAME on EVERY login node. No login node gives more. Switching login nodes does not help.
+- It is shared by ALL of your processes on that node (screens, local apps, harnesses, tunnels). When the total hits the cap the kernel
+  SIGKILLs a process ("Killed" in the log; `memory.events` oom_kill counter goes up). (2026-09-23: a truth-cache warm-up holding
+  6.4M ES docs in Python was SIGKILLed on login03, memory.peak == memory.max, oom_kill 9.)
+- Anything that could approach GBs of RAM (big in-memory datasets, DuckDB/pandas over large data, multi-million-row fetches,
+  several such processes at once) goes on a COMPUTE node:
+  - **1-2 nodes and ≤ 4 hours → interactive QOS** (`salloc -q interactive … srun <cmd>` inside screen; see
+    `~/.claude/salloc-screen-guide.md`). Interactive QOS limits: max 2 jobs per user, max 4 h wall.
+  - **More nodes or more time → `sbatch`.**
+- Login nodes are for editing, launching, light reads and monitoring only.
 
 **Debug queue constraints (Perlmutter):**
 - Max 5 submitted jobs total (running + pending) — the 6th submission is rejected by SLURM.

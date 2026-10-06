@@ -66,3 +66,22 @@ Critical flags/gotchas:
 A proteome can have data in `phytozome__*` tables AND appear in the `phytozome` XML organism Options, yet NOT show in the BioMart filter dropdown. Cause: the build's per-organism dataset enumeration (the `<short>_<pid>` datasets, ~635 of them) didn't include it — these come from a registry the live `meta_conf__dataset__main` (only 8 rows) doesn't hold. Adding XML Options does NOT fix it; JAMO portal tags are unrelated.
 - The deployed BioMart Perl server runs in a **Rancher container**; the live template cache location is inside the container (NOT `~/biomart-perl/conf/templates/cached/` — that was a wrong guess). The build iteration is in `~/git/zome-biomart-perl/lib/BioMart/Web/TemplateBuilder.pm` (~L258), datasets from `getAllDataSetsByDatabaseName(...)`.
 - **This registration step is unresolved** — ask the user which script registers per-organism datasets in the LIVE mart (vs the archive mart pipeline) before attempting a fix.
+
+## Making a newly-loaded org appear in the (prod) dropdown — REBUILD THE REGISTRY CACHE (verified 2026-09-21)
+
+The prod BioMart is served by **`zome-biomart` in namespace `igb-dev`** on the **IGB k3s cluster** (kubeconfig `~/.kube/zome-igb-2.yaml` — "dev" in the name, but it is the LIVE prod BioMart; prod BioMart is served from IGB, not SPIN). The perl server serves a **prebuilt registry cache**; a genome loaded into `mart_C` + present in the `phytozome` dropdown XML does NOT show until that cache is rebuilt. To rebuild (this is the "restart" — it fully re-enumerates datasets, so it DOES pick up newly-loaded orgs; confirmed for 1061 on 2026-09-10 and 1049/1052/1064/1065 on 2026-09-21):
+```bash
+export KUBECONFIG=~/.kube/zome-igb-2.yaml
+POD=$(kubectl -n igb-dev get pods -l app=zome-biomart -o name | head -1)
+# 1. move both cached registries aside (NFS mount /mnt/biomart-cache; keep dated .stale backups)
+kubectl -n igb-dev exec $POD -- sh -c 'cd /mnt/biomart-cache/cachedRegistries &&
+  mv BioMart.xml.cached BioMart.xml.cached.stale-YYYYMMDD &&
+  mv BioMart.xml.min_cached_mem BioMart.xml.min_cached_mem.stale-YYYYMMDD'
+# 2. rolling restart — the server regenerates BioMart.xml.cached on boot
+kubectl -n igb-dev rollout restart deploy/zome-biomart
+kubectl -n igb-dev rollout status deploy/zome-biomart
+# 3. VERIFY (~8-10 min later): the fresh cache (new mtime) contains the org's Gspecies
+kubectl -n igb-dev exec $(kubectl -n igb-dev get pods -l app=zome-biomart -o name|head -1) -- \
+  sh -c 'ls -la /mnt/biomart-cache/cachedRegistries/BioMart.xml.cached; grep -c <Gspecies> /mnt/biomart-cache/cachedRegistries/BioMart.xml.cached'
+```
+The regenerated cache is ~236 MB and takes a few minutes to write after the pod is Ready. This is a live-prod-serving action (brief BioMart unavailability during the restart) — do it deliberately.
