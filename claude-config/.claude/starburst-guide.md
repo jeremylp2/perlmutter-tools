@@ -10,10 +10,10 @@ Phycocosm + IMG). Companion state docs: `/global/cfs/cdirs/plant/xdomain_pfam/{S
 
 | Engine | Host | Auth file | Notes |
 |---|---|---|---|
-| **Starburst / Trino** (PRIMARY) | `lakehouse-pov.jgi.lbl.gov:443` | `~/.starburst_jwt` | The one this guide is about. SQL over federated catalogs. |
+| **Starburst / Trino** (PRIMARY) | `lakehouse.jgi.lbl.gov:443` | `~/.starburst_jwt` | The one this guide is about. SQL over federated catalogs. |
 | Dremio (older POC) | `lakehouse-poc.jgi.lbl.gov` | `~/.dremio_pat` | UI at that host; SSO only. Separate system; mostly superseded by Starburst. |
 
-`pov` = Starburst (**p**roof **o**f **v**alue), `poc` = Dremio. Easy to fat-finger.
+Starburst host is `lakehouse.jgi.lbl.gov` (`lakehouse-pov.jgi.lbl.gov` is outdated); `poc` = Dremio.
 
 ---
 
@@ -21,7 +21,7 @@ Phycocosm + IMG). Companion state docs: `/global/cfs/cdirs/plant/xdomain_pfam/{S
 
 The token in `~/.starburst_jwt` is an **encrypted JWE backed by a server-side STATEFUL SSO session**.
 
-- **Renewing is NOT "get a new token string."** Visiting `https://lakehouse-pov.jgi.lbl.gov/ui/token`
+- **Renewing is NOT "get a new token string."** Visiting `https://lakehouse.jgi.lbl.gov/ui/token`
   in a browser sends your SSO cookie, which **refreshes the server-side session**, so the *same token
   bytes* start validating again. The file usually doesn't need to change.
 - **Touching / re-saving `~/.starburst_jwt` does nothing** server-side. The renewal is the page visit.
@@ -41,7 +41,7 @@ import trino, trino.auth
 from pathlib import Path
 JWT = Path('~/.starburst_jwt').expanduser().read_text().strip()
 cur = trino.dbapi.connect(
-    host='lakehouse-pov.jgi.lbl.gov', port=443, http_scheme='https',
+    host='lakehouse.jgi.lbl.gov', port=443, http_scheme='https',
     auth=trino.auth.JWTAuthentication(JWT),
 ).cursor()
 cur.execute('SHOW CATALOGS')
@@ -56,7 +56,7 @@ print(cur.fetchall())
 ```python
 import sys; sys.path.insert(0, 'phytozome-import-starburst')
 from starburst_utils import make_client, show_catalogs, time_query
-client = make_client()                 # reads ~/.starburst_jwt, host defaults to lakehouse-pov
+client = make_client()                 # reads ~/.starburst_jwt, host default is the outdated lakehouse-pov
 print(show_catalogs(client))
 secs, df = time_query(client, "SELECT 1")
 ```
@@ -69,7 +69,7 @@ secs, df = time_query(client, "SELECT 1")
   change — never hardcode blindly; `SHOW CATALOGS` is the source of truth).
 
 ### C. CLI
-`trino --server https://lakehouse-pov.jgi.lbl.gov:443 --access-token "$(cat ~/.starburst_jwt)"`
+`trino --server https://lakehouse.jgi.lbl.gov:443 --access-token "$(cat ~/.starburst_jwt)"`
 (if the `trino` CLI jar is installed).
 
 ---

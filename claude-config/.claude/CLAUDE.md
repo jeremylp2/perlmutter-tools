@@ -25,6 +25,7 @@
 ## ⛔ ABSOLUTE RULE: NEVER have more than one process write to the same file. EVER. ⛔
 
 **Every file has exactly ONE writer. Not logs, not manifests, not status/progress files, not "just appends".** The ONLY exception (user, 2026-09-23): a log manager / intermediary process built to take several streams and write them itself (e.g. syslog, SLURM's own job-output forwarding) — it is then the single writer. Never several processes writing the same file directly at the same time.
+Second exception (user, 2026-10-06): the shared auto-memory folder (`autoMemoryDirectory` in `~/.claude/settings.json`) may be written by several Claude sessions — small single edits only (one memory file or one MEMORY.md line per edit, via Edit), never whole-file rewrites of MEMORY.md, never bulk regeneration.
 (2026-09-23: 12 nodes x 8 loader processes appended to ONE manifest file on NFS -> lines lost/corrupted -> false gate failure;
 then a "repair" watcher replaced that file under the writers -> `Stale file handle` -> loaders crashed -> multi-node ES build destroyed.
 Twice. The user: "no simultaneous parallel writes to the same file. no more. none. not now, not ever.")

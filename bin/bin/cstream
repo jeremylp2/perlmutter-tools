@@ -1,0 +1,26 @@
+#!/bin/bash
+# cstream - start a Claude Code session for one work stream.
+#   cstream                 list streams
+#   cstream <name> [args]   new session named <name> in ~/claude-streams/<name>
+#   cstream <name> -c       continue that stream's most recent session
+# Each stream folder has CLAUDE.md (loaded automatically: what the stream is, handoff to read)
+# and an optional 'dirs' file: extra directories, one per line, passed to claude as --add-dir.
+ROOT="$HOME/claude-streams"
+if [ $# -eq 0 ]; then
+  echo "streams in $ROOT:"
+  for d in "$ROOT"/*/; do [ -f "$d/CLAUDE.md" ] && printf '  %-16s %s\n' "$(basename "$d")" "$(sed -n 's/^# *//p;q' "$d/CLAUDE.md")"; done
+  exit 0
+fi
+name="$1"; shift
+dir="$ROOT/$name"
+if [ ! -f "$dir/CLAUDE.md" ]; then echo "no stream '$name' (no $dir/CLAUDE.md)"; exec "$0"; fi
+adds=()
+if [ -f "$dir/dirs" ]; then
+  while IFS= read -r p; do
+    p="${p%%#*}"; p="$(echo "$p" | xargs)"; [ -z "$p" ] && continue
+    p="${p/#\~/$HOME}"
+    if [ -d "$p" ]; then adds+=(--add-dir "$p"); else echo "warning: $p (from $dir/dirs) does not exist - skipped" >&2; fi
+  done < "$dir/dirs"
+fi
+cd "$dir" || exit 1
+exec claude -n "$name" "${adds[@]}" "$@"
