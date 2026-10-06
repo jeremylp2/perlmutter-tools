@@ -118,6 +118,9 @@ If one is ever committed, it is an incident — remediate immediately and comple
 
 **The user has asked for this over and over and is furious that it keeps happening. No commits after each change. No
 "helpful" pushes. Ever.**
+**Exception — the stow repo `~/gh/perlmutter-tools` (user, 2026-10-06):** commit AND push it with high frequency, without
+asking — after each guide/skill/script/CLAUDE.md change. Still: explicit paths only, credential + session-doc check before
+every commit, short message. This exception is ONLY for the stow repo; every GitLab/project repo keeps the rule below.
 - `git commit`, `git push` (any branch), `git cherry-pick`, `git revert`, `git merge`, `git commit --amend` all publish or
   create commits — each is FORBIDDEN unless the user's latest instructions explicitly asked for THAT exact step.
 - Default after any edit: leave it **uncommitted**, tell the user exactly what changed, and **WAIT**. Many edits → still
