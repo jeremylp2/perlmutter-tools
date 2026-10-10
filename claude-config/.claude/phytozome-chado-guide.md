@@ -180,6 +180,19 @@ Per-gene expression vectors for scRNA.
 - `experiment_set_id` — FK
 - `bit_vector`, `expression_vector_gz` — gzip-compressed float array aligned to `cell.cell_order`
 
+## Sequence storage: what the website reads is `feature_residues`
+
+- Sequence is served through the SQL function `public.residues(feature_id)`, which only assembles the
+  chunked table `feature_residues` (`string_agg(residues ORDER BY chunk)`, 100,000-char chunks;
+  `CHADO::Session::Db::store_residues` writes it). The web services' `/sequence/protein/<id>` uses it.
+- **Chromosomes**: sequence only in `feature_residues` (`feature.residues` is NULL for post-2023 genomes).
+- **Polypeptides**: in BOTH `feature.residues` AND `feature_residues` (loadGFF.pl has copied them since
+  2023-05-09). Checking only `feature.residues` proves nothing about what the site serves.
+- Any loader that writes polypeptides must also write `feature_residues`. Verify with
+  `public.residues(f.feature_id) = f.residues` for every polypeptide of the proteome.
+- 2026-10-09: the Python `load_gff.py` skipped the table copy, so 1061-1076 served no peptide sequence
+  (repaired; fixed on compgen master 782dbb10, gate `poly_residues_served` in verify_proteome_complete.py).
+
 ## CHADO load inputs: FASTA is a tracked file, GFF is REGENERATED from PAC2_0
 
 The two load inputs come from **different sources** — a frequent source of confusion when a
