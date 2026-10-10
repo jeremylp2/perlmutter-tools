@@ -22,6 +22,23 @@
 - Before sending ANY Bash command, scan it for `pkill`, `pgrep -f`, `killall`, `xargs kill`. If present: STOP and rewrite
   to kill-by-recorded-PID. Treat it exactly like a credential in a command line.
 
+## ⛔ ABSOLUTE RULE: CHADO data is ALWAYS scoped by PROTEOME. NEVER by organism. NO EXCEPTIONS. ⛔
+
+**Never select, filter, join, group, compare, count or report CHADO data by `organism_id` (or organism name).
+Not in queries, checks, tests, controls, samples, scans, reports, repair scripts, or pipeline code. Never.**
+One organism has many proteomes, annotations and assemblies; organism scope silently mixes them and gives wrong
+answers. (2026-10-09: an organism-grouped scan was reported as per-proteome results; organism_id was used for a
+test control, a gate test, a breakdown query, and in pipeline code — all violations.)
+- Scope via `PACProteome:<pid>` → `feature_dbxref` → features; the annotation set is that proteome's
+  `GFF_source` dbxref, the assembly its `FASTA` dbxref (`~/.claude/phytozome-chado-guide.md`, top section).
+- Report results per **proteome id**. Never present organism ids as the unit; never mix the two.
+- Before using ANY query, scan or result written by someone else (another session, a script, a colleague),
+  check how it scopes. If it touches organism, do not use its numbers — redo it by proteome.
+- Read `~/.claude/phytozome-chado-guide.md` BEFORE the first CHADO query of a session.
+- Enforced by the PreToolUse hook `block-organism-scope.py` (Bash/Edit/Write/MultiEdit): organism_id comparisons and
+  grouping/partitioning/ordering by organism in SQL or code are blocked. There is no bypass; rewrite by proteome.
+  Text ABOUT the rule goes into `.md` files via Edit/Write (exempt), never through Bash.
+
 ## ⛔ ABSOLUTE RULE: NEVER have more than one process write to the same file. EVER. ⛔
 
 **Every file has exactly ONE writer. Not logs, not manifests, not status/progress files, not "just appends".** The ONLY exception (user, 2026-09-23): a log manager / intermediary process built to take several streams and write them itself (e.g. syslog, SLURM's own job-output forwarding) — it is then the single writer. Never several processes writing the same file directly at the same time.
