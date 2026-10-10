@@ -22,21 +22,28 @@
 - Before sending ANY Bash command, scan it for `pkill`, `pgrep -f`, `killall`, `xargs kill`. If present: STOP and rewrite
   to kill-by-recorded-PID. Treat it exactly like a credential in a command line.
 
-## ⛔ ABSOLUTE RULE: CHADO data is ALWAYS scoped by PROTEOME. NEVER by organism. NO EXCEPTIONS. ⛔
+## ⛔ ABSOLUTE RULE: CHADO feature data is scoped by PROTEOME — never BUNDLED by organism ⛔
 
-**Never select, filter, join, group, compare, count or report CHADO data by `organism_id` (or organism name).
-Not in queries, checks, tests, controls, samples, scans, reports, repair scripts, or pipeline code. Never.**
-One organism has many proteomes, annotations and assemblies; organism scope silently mixes them and gives wrong
-answers. (2026-10-09: an organism-grouped scan was reported as per-proteome results; organism_id was used for a
-test control, a gate test, a breakdown query, and in pipeline code — all violations.)
-- Scope via `PACProteome:<pid>` → `feature_dbxref` → features; the annotation set is that proteome's
-  `GFF_source` dbxref, the assembly its `FASTA` dbxref (`~/.claude/phytozome-chado-guide.md`, top section).
-- Report results per **proteome id**. Never present organism ids as the unit; never mix the two.
+**One organism can have several genomes, annotations and proteome versions. Never select, filter, group, count,
+compare or report feature data by organism in a way that lumps those together.** Every query, check, test,
+control sample, scan, report, repair script and line of pipeline code must pin the specific proteome
+(`PACProteome:<pid>` → `feature_dbxref` → features; annotation = its `GFF_source` dbxref, assembly = its `FASTA`
+dbxref; `~/.claude/phytozome-chado-guide.md`, top section).
+(2026-10-09: an organism-grouped scan was reported as per-proteome results, and a control sample and a gate test
+were run over whole organisms — wrong. Then the opposite mistake: ripping out legitimate organism uses broke the
+WDL's organism lookup. Both are failures.)
+- **Organism IS fine** when it is tied to a specific proteome/genome: reading the organism record, resolving the
+  organism from the pipeline's organism name (and failing if it doesn't exist), joining to `organism` for a
+  proteome's features' name, setting `organism_id` on inserted features, or an organism condition alongside a
+  proteome/annotation/assembly pin. Do NOT remove those — they have purposes.
+- **Wrong**: organism as the only scope of feature data (e.g. "all genome features of this organism", "delete
+  this organism's features"), and grouping/aggregating feature data by organism.
+- Report results per **proteome id**. Never present organism totals as proteome results.
 - Before using ANY query, scan or result written by someone else (another session, a script, a colleague),
-  check how it scopes. If it touches organism, do not use its numbers — redo it by proteome.
+  check its scope. If it bundles by organism, do not use its numbers — redo it by proteome.
 - Read `~/.claude/phytozome-chado-guide.md` BEFORE the first CHADO query of a session.
-- Enforced by the PreToolUse hook `block-organism-scope.py` (Bash/Edit/Write/MultiEdit): organism_id comparisons and
-  grouping/partitioning/ordering by organism in SQL or code are blocked. There is no bypass; rewrite by proteome.
+- Enforced by the PreToolUse hook `block-organism-scope.py` (Bash/Edit/Write/MultiEdit): for statements touching
+  feature tables it blocks grouping by organism and organism filters with no proteome/annotation/assembly pin.
   Text ABOUT the rule goes into `.md` files via Edit/Write (exempt), never through Bash.
 
 ## ⛔ ABSOLUTE RULE: NEVER have more than one process write to the same file. EVER. ⛔

@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""PreToolUse guard (Bash, Edit, Write, MultiEdit): NEVER scope CHADO data by organism.
+"""PreToolUse guard (Bash, Edit, Write, MultiEdit): never BUNDLE CHADO feature data by organism.
 
-One organism has many proteomes, annotations and assemblies. Selecting, filtering,
-joining, grouping, comparing or counting by organism_id mixes them and gives wrong
-answers. Always scope by proteome: PACProteome:<pid> -> feature_dbxref -> features
-(and their primary annotation / FASTA dbxref). See ~/.claude/phytozome-chado-guide.md.
+One organism can have several genomes, annotations and proteome versions. Using the
+organism as the scope of feature data lumps them together and gives wrong answers.
+Organism is fine when the statement also pins a specific proteome / annotation /
+assembly (PACProteome, a dbxref or accession compared to a value), when reading the
+organism record itself, when joining to organism for its name, or when setting
+organism_id on inserted features. See ~/.claude/phytozome-chado-guide.md.
 
-Blocks (exit 2, message to Claude):
-  - Bash commands containing SQL / DB code that compare organism_id (=, ==, <>, !=,
-    IN, NOT IN, <=, >=) or GROUP/PARTITION/ORDER BY organism.
-  - Edit/Write/MultiEdit adding the same patterns to code files (.py .sql .sh .pl .pm
-    .wdl and extensionless scripts). Docs (.md .txt .rst) are exempt so the rule can be
-    documented. There is no bypass.
+Blocks (exit 2, message to Claude), only for statements that touch feature tables:
+  - grouping or partitioning by organism
+  - an organism_id filter with no proteome/annotation/assembly pin in the statement
+Bash commands are checked when they contain SQL / DB code; Edit/Write/MultiEdit are
+checked for code files (.py .sql .sh .pl .pm .wdl, extensionless). Docs are exempt.
 """
 import json
 import os
@@ -20,34 +21,43 @@ import sys
 
 SQLISH = re.compile(
     r"\b(select|update|delete|insert|psql|cur\.execute|session\.query|\.filter\(|"
-    r"resultset|search\(|join)\b",
-    re.I)
-VIOLATIONS = [
-    (re.compile(r"\borganism_id\b\s*(==|=|<>|!=|<=|>=|\bnot\s+in\b|\bin\b)", re.I),
-     "compares organism_id"),
-    (re.compile(r"(==|=|<>|!=)\s*[\w.\"']*\borganism_id\b", re.I),
-     "compares against organism_id"),
-    (re.compile(r"\b(group|partition|order)\s+by\b[^;]*?\borganism", re.I),
-     "groups/partitions/orders by organism"),
-]
+    r"resultset|search\()", re.I)
+FEATURE_TABLES = re.compile(
+    r"\b(feature|featureloc|featureprop|featurepropjson|feature_relationship|"
+    r"feature_dbxref|feature_residues|feature_cvterm|analysisfeature)\b", re.I)
+GROUP_BY_ORG = re.compile(r"\b(group|partition)\s+by\b[^;]*?\borganism", re.I)
+# organism_id compared to a value / parameter / list -- not to another organism_id
+# column (a join to read the organism's attributes is fine).
+ORG_FILTER = re.compile(
+    r"\borganism_id\b\s*(?:(?:==|=|<>|!=)\s*(?![\w.\"'`]*organism_id\b)\S"
+    r"|(?:not\s+)?in\s*\()", re.I)
+# Something in the same statement that pins ONE proteome / annotation / assembly.
+PIN = re.compile(
+    r"PACProteome|proteome_id|\bdbxref_id\b\s*(?:==|=|\bin\b|=\s*any)\s*\S|"
+    r"\baccession\b\s*(?:==|=|\bin\b)\s*\S|annotation_dbxref|assembly_dbxref", re.I)
 CODE_EXT = {".py", ".sql", ".sh", ".pl", ".pm", ".wdl", ".bash", ""}
 
-MSG = """BLOCKED by the NEVER-ORGANISM rule (global CLAUDE.md, phytozome-chado-guide.md): {why}.
-Never select, filter, join, group, compare or count CHADO data by organism_id -- not for
-queries, checks, tests, controls, scans, reports or pipeline code. One organism has many
-proteomes/annotations/assemblies; organism scope silently mixes them.
-Scope by PROTEOME instead:
-  dbxref x JOIN db d ON d.db_id=x.db_id AND d.name='PACProteome' AND x.accession='<pid>'
-  JOIN feature_dbxref fx ON fx.dbxref_id=x.dbxref_id JOIN feature f ON f.feature_id=fx.feature_id
-  (annotation set: f.dbxref_id = that proteome's GFF_source dbxref; assembly: its FASTA dbxref).
-Report results per proteome id, never per organism id. Also re-check any query or scan
-written by someone else before using its output."""
+MSG = """BLOCKED: this {where} bundles CHADO feature data by organism ({why}).
+One organism can have several genomes / annotations / proteome versions; organism scope
+lumps them together. Pin the specific proteome instead (PACProteome:<pid> -> feature_dbxref
+-> features; annotation = its GFF_source dbxref, assembly = its FASTA dbxref), or add that
+pin alongside the organism condition. Organism is fine for reading the organism record,
+joining for its name, setting organism_id on inserts, or alongside a proteome pin.
+Report per proteome, never organism totals as proteome results."""
+
+
+def statements(text):
+    return [s for s in re.split(r";\s*(?:\n|$)", text) if s.strip()]
 
 
 def check(text):
-    for rx, why in VIOLATIONS:
-        if rx.search(text):
-            return why
+    for st in statements(text):
+        if not FEATURE_TABLES.search(st):
+            continue
+        if GROUP_BY_ORG.search(st):
+            return "groups/partitions feature data by organism"
+        if ORG_FILTER.search(st) and not PIN.search(st):
+            return "filters feature data by organism with no proteome/annotation/assembly pin"
     return None
 
 
@@ -64,8 +74,7 @@ def main():
         if SQLISH.search(cmd):
             texts.append(cmd)
     elif tool in ("Edit", "Write", "MultiEdit"):
-        path = ti.get("file_path", "") or ""
-        ext = os.path.splitext(path)[1].lower()
+        ext = os.path.splitext(ti.get("file_path", "") or "")[1].lower()
         if ext not in CODE_EXT:
             return 0
         if tool == "Edit":
@@ -77,7 +86,7 @@ def main():
     for t in texts:
         why = check(t)
         if why:
-            sys.stderr.write(MSG.format(why=why) + "\n")
+            sys.stderr.write(MSG.format(where="command" if tool == "Bash" else "edit", why=why) + "\n")
             return 2
     return 0
 

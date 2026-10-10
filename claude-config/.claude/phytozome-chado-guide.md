@@ -4,11 +4,14 @@ This guide covers the non-obvious CHADO table structure, type IDs, and query pat
 for the Phytozome database as exposed in the JGI community Lakehouse
 (`"plant-db-7 postgresql"`).
 
-## ⛔ NEVER select, filter, join, group, compare, count or report by organism — ALWAYS by proteome. NO EXCEPTIONS.
+## ⛔ Scope feature data by PROTEOME — never BUNDLE it by organism
 
-**Enforced by the `block-organism-scope.py` hook. Applies to every query, test, control sample, scan, report and
-line of pipeline code — including scans or results produced by someone else (check their scoping before using
-them). Report per proteome id, never per organism id.**
+**One organism can have several genomes, annotations and proteome versions; organism-only scope or grouping lumps
+them together. Pin the proteome. Applies to every query, test, control sample, scan, report and line of pipeline
+code — including results produced by someone else (check their scope before using them). Report per proteome id.
+Organism is fine when tied to a specific proteome/genome (organism record lookups, the pipeline's organism-name
+resolution, joins for names, `organism_id` on inserts, conditions alongside a proteome pin) — don't remove those.
+Enforced by the `block-organism-scope.py` hook.**
 
 **`WHERE f.organism_id = N` is NEVER a valid scope for a proteome's features, counts,
 loads, or dev-vs-prod comparisons. Scope on the PROTEOME (`PACProteome:<pac_id>`), always.**
