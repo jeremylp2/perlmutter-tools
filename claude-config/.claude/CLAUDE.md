@@ -321,6 +321,10 @@ belong in `inparanoid_homologs/diamond_db/` (user: "diamond_db is the right spot
 the legacy InParanoid location; `diamondparanoid_loc` rows whose path points into `all_db/` (written by the JAWS
 pipeline's collect step) are diamond tables in the WRONG place — to be moved to `diamond_db/`, never a reason to read
 `inparanoid_loc`. A pair without a diamond row was never computed: say so; the fix is a diamond run.
+**If you are not CERTAIN a table was calculated with diamond InParanoid, it must be RECOMPUTED with diamond** (user,
+2026-10-13). Certain = byte-identical to the output of a run known to use diamond (a JAWS `-cores-diamond` run, or a
+pre-JAWS run whose directory still holds its diamond output). Path, folder, date, file format and `inparanoid_loc`
+membership are NOT evidence either way — never call a table non-diamond (or diamond) from them.
 
 **If the user asks about releasing a proteome end-to-end (what's needed to get a genome onto dev/prod), read `~/.claude/phytozome-release-guide.md` for the full checklist.**
 

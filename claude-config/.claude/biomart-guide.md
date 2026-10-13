@@ -52,7 +52,9 @@ Pair-file location tables in **`deploy_config_metadata`** (plant-db-5): `diamond
 > "fill gaps" from `inparanoid_loc` — not as a fallback, not for one pair, not for older proteomes. Diamond tables
 > belong in `.../inparanoid_homologs/diamond_db/`; `.../all_db/` is the legacy InParanoid location. Some
 > `diamondparanoid_loc` rows point into `all_db/` (written by the JAWS homolog pipeline's collect step) — those are
-> diamond tables in the wrong place, to be moved to `diamond_db/`. A pair with no diamond row has NOT been computed: the
+> diamond tables in the wrong place, to be moved to `diamond_db/`. If it is not CERTAIN a table was calculated with
+> diamond InParanoid (byte-identical to a known diamond run's output), it must be recomputed with diamond — path, date,
+> format and `inparanoid_loc` membership are not evidence either way. A pair with no diamond row has NOT been computed: the
 > fix is a diamond computation for that pair, never the legacy file. Report such pairs as "no diamond pair computed".
 > (`orthologPipeline.py` extract and `prepareBioMartOrthologs.py --diamond` already read only `diamondparanoid_loc`;
 > `verifyBioMartOrthologs.py` still falls back to `inparanoid_loc` for its expected counts — do not use that fallback
