@@ -48,9 +48,11 @@ Layout: `phytozome__ortholog__dm` (MERGE) over `phytozome__ortholog__dm_NNNN` My
 Pair-file location tables in **`deploy_config_metadata`** (plant-db-5): `diamondparanoid_loc` (DIAMOND) and `inparanoid_loc` (legacy) — `(proteome_a, proteome_b, path)`.
 
 > ⛔ **RULE (user, 2026-10-13): BioMart orthologs are DIAMOND ONLY. NEVER go back to the old InParanoid set. NEVER.**
-> Only pairs in `diamondparanoid_loc` (files under `.../inparanoid_homologs/diamond_db/`) may be extracted or loaded.
-> Never extract, load, propose loading, or "fill gaps" from `inparanoid_loc` / `.../inparanoid_homologs/all_db/` —
-> not as a fallback, not for one pair, not for older proteomes. A pair with no diamond row has NOT been computed: the
+> Only pairs registered in `diamondparanoid_loc` may be extracted or loaded. Never extract, load, propose loading, or
+> "fill gaps" from `inparanoid_loc` — not as a fallback, not for one pair, not for older proteomes. Diamond tables
+> belong in `.../inparanoid_homologs/diamond_db/`; `.../all_db/` is the legacy InParanoid location. Some
+> `diamondparanoid_loc` rows point into `all_db/` (written by the JAWS homolog pipeline's collect step) — those are
+> diamond tables in the wrong place, to be moved to `diamond_db/`. A pair with no diamond row has NOT been computed: the
 > fix is a diamond computation for that pair, never the legacy file. Report such pairs as "no diamond pair computed".
 > (`orthologPipeline.py` extract and `prepareBioMartOrthologs.py --diamond` already read only `diamondparanoid_loc`;
 > `verifyBioMartOrthologs.py` still falls back to `inparanoid_loc` for its expected counts — do not use that fallback

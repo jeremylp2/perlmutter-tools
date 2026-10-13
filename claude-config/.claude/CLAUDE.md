@@ -315,9 +315,12 @@ every commit, short message. This exception is ONLY for the stow repo; every Git
 **If the user asks you to do anything involving BioMart (`phytozome_mart_C`, the Genomes/Families frontend, the organism filter dropdown, or ortholog/homolog loads into the mart), read `~/.claude/biomart-guide.md` before proceeding.**
 
 **⛔ ABSOLUTE RULE: BioMart orthologs are DIAMOND ONLY. NEVER go back to the old InParanoid set. NEVER.** (user, 2026-10-13)
-Only pairs in `deploy_config_metadata.diamondparanoid_loc` (`inparanoid_homologs/diamond_db/`) may be extracted or
-loaded. Never use `inparanoid_loc` / `inparanoid_homologs/all_db/` — not as a fallback, not for one pair, not for old
-proteomes, not to "fill a gap". A pair without a diamond row was never computed: say so; the fix is a diamond run.
+Only pairs registered in `deploy_config_metadata.diamondparanoid_loc` may be extracted or loaded. Never use
+`inparanoid_loc` — not as a fallback, not for one pair, not for old proteomes, not to "fill a gap". Diamond tables
+belong in `inparanoid_homologs/diamond_db/` (user: "diamond_db is the right spot"). `inparanoid_homologs/all_db/` is
+the legacy InParanoid location; `diamondparanoid_loc` rows whose path points into `all_db/` (written by the JAWS
+pipeline's collect step) are diamond tables in the WRONG place — to be moved to `diamond_db/`, never a reason to read
+`inparanoid_loc`. A pair without a diamond row was never computed: say so; the fix is a diamond run.
 
 **If the user asks about releasing a proteome end-to-end (what's needed to get a genome onto dev/prod), read `~/.claude/phytozome-release-guide.md` for the full checklist.**
 
