@@ -314,6 +314,11 @@ every commit, short message. This exception is ONLY for the stow repo; every Git
 
 **If the user asks you to do anything involving BioMart (`phytozome_mart_C`, the Genomes/Families frontend, the organism filter dropdown, or ortholog/homolog loads into the mart), read `~/.claude/biomart-guide.md` before proceeding.**
 
+**⛔ ABSOLUTE RULE: BioMart orthologs are DIAMOND ONLY. NEVER go back to the old InParanoid set. NEVER.** (user, 2026-10-13)
+Only pairs in `deploy_config_metadata.diamondparanoid_loc` (`inparanoid_homologs/diamond_db/`) may be extracted or
+loaded. Never use `inparanoid_loc` / `inparanoid_homologs/all_db/` — not as a fallback, not for one pair, not for old
+proteomes, not to "fill a gap". A pair without a diamond row was never computed: say so; the fix is a diamond run.
+
 **If the user asks about releasing a proteome end-to-end (what's needed to get a genome onto dev/prod), read `~/.claude/phytozome-release-guide.md` for the full checklist.**
 
 **If the task involves submitting/monitoring SLURM jobs on Perlmutter (sbatch, squeue, sacct, arrays, dependencies, scrontab) or deciding whether a job truly finished, read `~/.claude/perlmutter-slurm-guide.md` before proceeding.** For jobs on dori (including submitting to dori from Perlmutter), read `dori-slurm-guide.md` from the **dori-tools** repo instead — dori has different QOS, paths and limits.

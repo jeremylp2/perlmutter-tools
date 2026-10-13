@@ -45,7 +45,16 @@ Editor → file → `insertConfXML.groovy <db> <dataset> <file>` (writes `meta_c
 
 Layout: `phytozome__ortholog__dm` (MERGE) over `phytozome__ortholog__dm_NNNN` MyISAM partitions (~250-300M rows each); `loaded_ortholog_pairs` (`organism_id, ortholog_organism_id, cnt`) tracking table.
 
-Pair-file location tables in **`deploy_config_metadata`** (plant-db-5): `diamondparanoid_loc` (current, DIAMOND) and `inparanoid_loc` (legacy) — `(proteome_a, proteome_b, path)`. The pipeline checks **diamondparanoid_loc first, inparanoid_loc as fallback**.
+Pair-file location tables in **`deploy_config_metadata`** (plant-db-5): `diamondparanoid_loc` (DIAMOND) and `inparanoid_loc` (legacy) — `(proteome_a, proteome_b, path)`.
+
+> ⛔ **RULE (user, 2026-10-13): BioMart orthologs are DIAMOND ONLY. NEVER go back to the old InParanoid set. NEVER.**
+> Only pairs in `diamondparanoid_loc` (files under `.../inparanoid_homologs/diamond_db/`) may be extracted or loaded.
+> Never extract, load, propose loading, or "fill gaps" from `inparanoid_loc` / `.../inparanoid_homologs/all_db/` —
+> not as a fallback, not for one pair, not for older proteomes. A pair with no diamond row has NOT been computed: the
+> fix is a diamond computation for that pair, never the legacy file. Report such pairs as "no diamond pair computed".
+> (`orthologPipeline.py` extract and `prepareBioMartOrthologs.py --diamond` already read only `diamondparanoid_loc`;
+> `verifyBioMartOrthologs.py` still falls back to `inparanoid_loc` for its expected counts — do not use that fallback
+> to justify a load.) Diagnosis that led here: `$SCRATCH/biomart_ortho_716_533/DIAGNOSIS.md`.
 
 Run (wrapper template), credentials from env/config not literals:
 ```bash
