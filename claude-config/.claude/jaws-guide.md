@@ -10,6 +10,11 @@ is accessible unless it was declared as an input or is baked into a Docker image
 
 Available compute sites: `perlmutter`, `dori`
 
+**Running on dori from Perlmutter:** `jaws submit ... dori` from Perlmutter works end to end. JAWS stages the
+Perlmutter input files to dori AND brings the outputs back to the Perlmutter CFS team output dir
+`/global/cfs/cdirs/plantbox/phytzm-jaws/<user>/<run_id>/<cromwell_id>/` (the `output_dir` in `jaws status`). No scp,
+no dori login, no MFA needed for this — even though dori itself cannot see `/global/cfs`.
+
 **WDL version:** Always use `version 1.0`. WDL 1.1 is not supported by Cromwell in JAWS.
 
 **Execution backend:** JAWS uses HTCondor → SLURM on Perlmutter. You cannot change the backend from HTCondor within JAWS.

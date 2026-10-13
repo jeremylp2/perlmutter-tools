@@ -11,6 +11,10 @@ multiplexing once; Claude then reuses the authenticated master.
 - They are mutually inaccessible → move files with `scp` over the SSH mux (below). Build
   (shifter) and deploy-to-`/global/dna` (via dtn01) must happen on Perlmutter; dori is
   source/record only.
+- **Exception — JAWS runs:** a JAWS run submitted from Perlmutter to site `dori`
+  (`jaws submit ... dori`) needs none of that. JAWS stages the inputs to dori and returns
+  the outputs to the Perlmutter CFS team output dir
+  (`/global/cfs/cdirs/plantbox/phytzm-jaws/<user>/<run_id>/<cromwell_id>/`). No dori login/MFA.
 
 ## One-time setup (connection multiplexing)
 1. Add to `~/.ssh/config` (shared home):
