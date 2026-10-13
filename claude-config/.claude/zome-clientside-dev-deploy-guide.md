@@ -5,6 +5,13 @@ and why released genomes "disappear" from dev.** Dev runs on the **SPIN developm
 **`plant`**, kubeconfig `~/.kube/development.yaml` (`export KUBECONFIG=~/.kube/development.yaml` before every
 kubectl — see `spin-helm-guide.md`).
 
+> **Observed 2026-10-09 — the scheduled rebuild was NOT running.** Pod `zome-clientsidebuilder-857b6457f7-4ndb4`
+> (DEPLOY_BRANCH=trunk) had only `node`, idle shells and defunct old builds — no cron/supercronic process — and its
+> checkout sat at 9763179f, weeks behind trunk. Until the cron is confirmed running again, build by hand after every
+> push: `kubectl -n plant exec <pod> -- sh -c 'cd /home/wwwzome/code && nohup ./build-zome-clientside.sh >
+> /home/wwwzome/build_<date>.log 2>&1 & echo $!'`, wait for that PID to go Z, check 0 `ERROR in|npm ERR`, and confirm the
+> dev SPA shell's commitHash/bundle changed. Prod on IGB is manual too (`phytozome-release-guide.md` steps 12/12b).
+
 ## The pipeline (build → shared PVC → static server)
 
 The frontend SPA (`zome-clientside`, React/webpack) is **not baked into an image**. It is rebuilt from the

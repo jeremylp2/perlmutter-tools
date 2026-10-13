@@ -46,6 +46,9 @@ proteome id and annotation version from `pac_proteome_properties` (a MATERIALIZE
      `~/git/compgen-blast` (branch `blast-cron`) — NOT the main `~/git/compgen` checkout, which changes branches.
      Log `$SCRATCH/blast/blast_cron.log`; `--dry-run` lists what it would build; `--proteome-ids X` for one.
      Needs `use_pure=True` on mysql.connector (C ext cannot load mysql_native_password) and passwordless ssh to dtn01.
+     Editing the scrontab: it contains a token in a commented line — `umask 077; scrontab -l > <private dir>/before.txt`,
+     sed exactly one line into after.txt, check line counts equal and only that line changed, `scrontab after.txt`, verify
+     with `scrontab -l | cmp - after.txt`, then delete both copies. Never print the full scrontab.
 7. **BioMart** — THREE parts, never only one (memory `biomart_genome_add_procedure.md`, `biomart-guide.md`):
    a. annotation → `phytozome_mart_C` (plant-db-6): `exportFromChado.pl -type BioMart` → per-table `DELETE … WHERE
       organism_id=<pid>; LOAD DATA LOCAL INFILE`; then `restricted=0` on gene/transcript main for unrestricted orgs.
@@ -87,6 +90,13 @@ proteome id and annotation version from `pac_proteome_properties` (a MATERIALIZE
     (repo is `code/zome-clientside`; the script re-clones when behind). Wait for the PID to go Z, 0 `ERROR in|npm ERR`,
     new `dist/main-*.js` + `njphytozome.json.tgz`; then the live shell must show the new commitHash and bundle, and
     `https://phytozome-next.jgi.doe.gov/njphytozome.json.tgz` must contain the new proteomeIds.
+12b. **Dev front-end build — ALSO MANUAL** (observed 2026-10-09: the SPIN dev builder had NO cron process and was stuck
+    weeks behind trunk): `KUBECONFIG=~/.kube/development.yaml`, ns `plant`, deployment `zome-clientsidebuilder`
+    (DEPLOY_BRANCH=trunk), code `/home/wwwzome/code`; same nohup launch/check as prod (log `/home/wwwzome/build_<date>.log`).
+    Dev `njphytozome.json`: regenerate against the dev deploy (`current_release` env 2) in a TRUNK worktree
+    (`git worktree add --detach $SCRATCH/zc_trunk_wt origin/trunk`), same diff review, push `HEAD:trunk`, then build.
+    Dev pages need the dev basic-auth (`~/.phytozome_dev_basicauth`, user:pass) — read it inside python, never on a cmdline.
+    `kubectl exec … -- sh -c '<script>'` can be blocked by a safety check; run plain commands (ps, grep, ls, `git -C`).
 13. **Bookkeeping** — `deploy.proteome_progress`: `released_in_phytozome` (2 = prod), `portal_files`, `org_page_finalized`,
     `biomart_load_complete`. Update only with the user's go.
 
