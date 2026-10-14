@@ -220,3 +220,45 @@ subprocess.run(["bash", "-lc", perl_cmd])
 The `bash -lc` ensures `.bashrc` conda init is sourced so `conda activate` works.
 
 **"pipeline_lock held"**: another instance (manual run or cron) is already running. Check with `SELECT GET_LOCK('homolog_pipeline', 0)` in deploy_config_metadata — returns 0 if held. Check who holds it via `performance_schema.metadata_locks` or just wait for it to complete.
+
+## Diamond ortholog tables (`diamondparanoid_loc`) — rules, proof, safe registration (2026-10-13)
+
+**Rules (user):** BioMart/ortholog consumers use ONLY `deploy_config_metadata.diamondparanoid_loc` rows, never
+`inparanoid_loc`. Diamond tables belong in `/global/cfs/cdirs/plantbox/homology/inparanoid_homologs/diamond_db/`
+(`all_db/` is the legacy InParanoid location; diamond rows pointing into `all_db/` are misplaced). Rows already under
+`diamond_db/` are accepted as diamond. Anything else not PROVEN diamond must be recomputed. Path, date, file format and
+`inparanoid_loc` membership are NOT evidence either way.
+
+**Proving a table was computed with diamond:** read the JAWS run's `<output_dir>/metadata.json` (Cromwell metadata,
+returned to CFS even for dori runs). For `calls['diamond_homologs.run_inparanoid']` shard N require:
+`commandLine` contains `inparanoid.pl … -cores-diamond`, `dockerImageUsed ==
+jlphillipslbl/inparanoid@sha256:018ff7a98c039877869f18c49dd17330361d0c9e3d02ce56432a74a267d64fd6`, `returnCode == 0`,
+workflow `status == Succeeded`. **Call-cached shards have NO commandLine/dockerImageUsed** — `callCaching.result` is
+`"Cache Hit: <workflow_id>:diamond_homologs.run_inparanoid:<shard>"`; follow it to the executed call (map workflow id →
+output_dir via `jaws history` field `cromwell_run_id`) and check there, and confirm the executed output is byte-identical
+to the copy you register. If the chain cannot be followed (source metadata gone), the table is unproven → recompute.
+Reference implementation: `$SCRATCH/step2/register_certain.py` (`prove()`), `$SCRATCH/step2/driver.py`.
+
+**Where a run's tables are:** use `outputs.json` → `diamond_homologs.table_files` (authoritative). Executed shards write
+`call-run_inparanoid/shard-N/execution/table_<new>_<partner>.txt`; cached shards write
+`shard-N/cacheCopy/execution/…`. Task stdout/stderr are NOT returned with dori runs — use metadata.json.
+
+**Safe registration (ad hoc procedure used for 716/533 and the step-2 batch):** target
+`diamond_db/<new>/table.<new>.fa-<partner>.fa`; row `(min,max,path)` with `hr_path`/`rev_hr_path` NULL. Before any
+write: refuse if the target file or `.tmp` exists or a row for the pair exists. Content check each table: header
+`OrtoID Score OrtoA OrtoB`, ≥1 group, every OrtoA gene in `<new>.fa` and every OrtoB gene in `<partner>.fa`
+(FASTA headers = PAC ids). Copy to `.tmp`, md5-compare to source, rename. Insert all rows in ONE transaction only after
+every copy verified; post-check one row per pair pointing at an md5-identical file. Never overwrite an existing file —
+an existing unproven file is renamed aside (`*.unverified_<date>`) only with user OK. Reference:
+`$SCRATCH/fix_716_533/register_tables.py`.
+
+**Known pipeline traps (as of 2026-10-14, not yet fixed in code):**
+- `wdl/collect_results.py copy_table_files` globs only `shard-*/execution/table_*.txt` → misses call-cached shards
+  (e.g. 1062 registered 1 of 346); copies to `all_db/` (wrong place); if the destination already exists it skips the
+  copy and still registers that (possibly legacy) file. `store_results.py` (pre-JAWS) has the same skip-if-exists flaw.
+- `homolog_blast_compute`/`inparanoid_computes` go DONE when the run validates — nothing checks that every expected
+  partner (released≥1, not skip-listed) has a diamond row. 716 sits on `skip_list.txt`.
+- `prepare_jaws.validate_deflines` reads only the first data row; JAWS runs pack the deflines tarball at SUBMIT time, so a
+  defline fix after submission is not in that run's JSON.
+- Pair-completeness audit: expected pairs = all pairs among released≥1 & not skip-listed proteomes; compare with
+  `diamondparanoid_loc` (2026-10-13: 362/362 DONE proteomes had gaps; 10,796 pairs missing).
