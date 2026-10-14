@@ -113,3 +113,25 @@ kubectl -n igb-dev exec $(kubectl -n igb-dev get pods -l app=zome-biomart -o nam
   sh -c 'ls -la /mnt/biomart-cache/cachedRegistries/BioMart.xml.cached; grep -c <Gspecies> /mnt/biomart-cache/cachedRegistries/BioMart.xml.cached'
 ```
 The regenerated cache is ~236 MB and takes a few minutes to write after the pod is Ready. This is a live-prod-serving action (brief BioMart unavailability during the restart) — do it deliberately.
+
+## Verifying MARTVIEW (the web UI) — use a real browser, not the API (2026-10-14)
+
+martservice/XML queries do NOT exercise martview's code path (Web.pm → Query.pm::addAttributeFilter), and the
+martview URL-access form (`/biomart/martview?VIRTUALSCHEMANAME=…&ATTRIBUTES=…&FILTERS=…`) does NOT populate the session
+on this deployment (summary shows "[None selected]", results empty even for a trivial query) — so neither proves
+martview works. Drive the real page with headless Chromium (Playwright):
+- Playwright Python installed in `$SCRATCH/biomart_martview_test/pwlib` (`module load python` + `sys.path.insert`);
+  browser = `~/.cache/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-linux64/chrome-headless-shell`
+  passed as `executable_path`. Harness: `$SCRATCH/biomart_martview_test/pw_test.py` (run in screen via `pw_test.sh`).
+- Steps = what a user does: `databasemenu` = "V14 Genomes and Families" → `datasetmenu_3` = "Phytozome V14 Genomes" →
+  click "Filters" → check `phytozome__filtercollection.org_filter`, select `phytozome__filter.organism_id` = <pid> →
+  expand GENE (click the element whose onclick references `phytozome__filtergroup.gene_filters`) → check
+  `phytozome__filtercollection.id_list_limit`, `phytozome__filter.id_list_limit_filters` = `gene_name_filter`, fill
+  `…id_list_limit_filters__text` → click "Attributes" → radio `phytozome__attributepage` = orthologs | sequences →
+  orthologs: check `phytozome__orthologs__attribute.ortholog_organism_name` + select
+  `phytozome__orthologs__attributefilter.ortholog_organism_name` = stored name (e.g. `Ptrichocarpa_v4.1`, NOT the display
+  name) | sequences: expand groups (onclick `phytozome__sequences__attributegroup.sequence` / `.header_info`), radio
+  `…attribute.gene_flank`, check `…attribute.upstream_flank`, fill `…attributefilter.upstream_flank` = 200 → click
+  Results → read `#resultsTableId`; screenshot each test.
+- To prove the setTable regression is gone, first fire ~30 `martservice?type=attributes&dataset=phytozome` requests
+  (the trigger), then run the martview tests. Fixed by zome-biomart 198ba1f8.
