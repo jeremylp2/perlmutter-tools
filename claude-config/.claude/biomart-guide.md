@@ -60,6 +60,21 @@ Pair-file location tables in **`deploy_config_metadata`** (plant-db-5): `diamond
 > `verifyBioMartOrthologs.py` still falls back to `inparanoid_loc` for its expected counts — do not use that fallback
 > to justify a load.) Diagnosis that led here: `$SCRATCH/biomart_ortho_716_533/DIAGNOSIS.md`.
 
+> ⛔ **COLUMN-COUNT GATE — every ortholog file must have exactly 10 tab fields before LOAD DATA** (2026-10-14).
+> `phytozome__ortholog__dm_*` has 10 columns since Dec 2024 (`ortholog_gene_id`, compgen d5a64fb6/0f34e835).
+> The exporter on compgen branches `chado_load` / `chado-load-docker` still writes **9** fields. On 2026-01-12/13 an
+> extract ran with that old exporter (the shared `~/git/compgen` checkout was on chado_load until 2026-01-19 23:11)
+> and `loadBioMartOrthologs.py` (bare `LOAD DATA LOCAL`, no checks, never writes `loaded_ortholog_pairs`) loaded
+> 1,862 files into `_0032` → **247,340,370 column-shifted rows** (ortholog_gene_id=0, ortholog_gene_name=<org id>,
+> ortholog_organism_id=0, ortholog_organism_name=<relationship>, relationship=NULL), invisible to tracking.
+> `LOAD DATA LOCAL` turns field-count/type errors into WARNINGS, so it never fails. Rules:
+> - run the exporter from a checkout/worktree pinned to master and record its branch+commit in the run log;
+> - gate every file: `awk -F'\t' 'NF!=10' f | wc -l` must be 0;
+> - after loading, `ortholog_organism_id=0` / `relationship IS NULL` count for the loaded groups must be 0;
+> - record every loaded pair in `loaded_ortholog_pairs`.
+> Detection query (indexed): `SELECT COUNT(*) FROM phytozome__ortholog__dm_NNNN WHERE ortholog_organism_id=0`.
+> Repair scripts/evidence: `$SCRATCH/biomart_ortho_716_533/` (repair_shifted.sh, load_pairs.sh, census_shifted.tsv).
+
 Run (wrapper template), credentials from env/config not literals:
 ```bash
 conda run --no-capture-output -n chado python3 -u prepareBioMartOrthologs.py \
