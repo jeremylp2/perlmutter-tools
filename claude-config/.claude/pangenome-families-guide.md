@@ -28,7 +28,7 @@ loaded, exported and wired into the site. Read with `phytozome-chado-guide.md`, 
 - Family props: `group_size` (all), `cluster_type` (PAV class: Core/SoftCore/Shell/Cloud/Private), `cluster_hmm`,
   `cluster_tree`, `cluster_alignment`.
 - Proteome set: `dbxref_relationship` (PACProteome dbxref `part_of` method dbxref), one per proteome.
-- Method ids: BrachyPan 5043, SorghumPan 5679, CamelinaPan 5698, BrapaPan 5724, PennyPan 5761. New ids come from
+- Method ids: BrachyPan 5043, SorghumPan 5679, CamelinaPan 5698, BrapaPan 5724, PennyPan 5761, EucyPan 6002 (loaded 2026-10-19 with load_pan_families.py). New ids come from
   `public.method_id_seq` (NOT `old_public.method_id_seq`, stale).
 - Proteome-scoped lookups: annotation dbxref via MATERIALIZED VIEW `pac_genome_worklist` (accession = proteome id) or the
   PACProteome→GFF_source chain; never match gene names globally (names repeat across versions, e.g. 891 vs 993).
