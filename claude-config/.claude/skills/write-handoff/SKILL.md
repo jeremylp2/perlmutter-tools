@@ -31,9 +31,9 @@ STALE deployments and trusted DERIVED claims as fact.
 
 ## ⛔ SCOPE = THE ENTIRE CONTEXT, EVERY TIME. NEVER "THE CURRENT TASK." (user, 2026-10-19 — non-negotiable)
 
-**Failure that must never repeat:** a handoff written about only the task in progress (EucyPan), silently omitting every
-other workstream in the same context (an end-to-end pipeline test + code fix, a production push, a cleanup, research
-findings, open items carried from earlier handoffs). The user: "When I say everything I mean everything. The handoff has
+**Failure that must never repeat:** a handoff written about only the task in progress, silently omitting every other
+workstream in the same context (e.g. an earlier test and code fix, a production push, a cleanup, research findings, open
+items carried from earlier handoffs). The user: "When I say everything I mean everything. The handoff has
 to be incredibly comprehensive and cover the whole context. every time. without exception. this can never happen again."
 
 **The scope is ALWAYS the whole context window, from its very first message to now** — including the compaction summary
@@ -43,9 +43,8 @@ what was done, the result, the evidence, the artifacts, what remains.
 
 **Mandatory mechanics (do all of them, in this order, before calling the handoff done):**
 1. **Context inventory first.** Before composing prose, walk the entire context chronologically and list every
-   workstream/topic touched (e.g. "JBPrivate→IGB sync test", "public browsers → IGB push", "SorghumPan trackList dedup",
-   "EucyPan families", "Mongo exporter rewrite", "memory/guide updates"), plus everything inherited from the opening
-   summary / prior handoffs. Each becomes a section. When unsure whether something is a separate topic, make it one.
+   workstream/topic touched — the main task, every side task, every investigation, every fix, every push/deploy,
+   every cleanup, every guide/memory/skill edit — plus everything inherited from the opening summary / prior handoffs. Each becomes a section. When unsure whether something is a separate topic, make it one.
 2. **Per-topic section contents (every topic, no exceptions):** goal as the user stated it; chronological steps taken;
    results with evidence (commands/counts/ids/commits/run ids/digests); user decisions about it; artifacts (paths, branches,
    commits pushed or not); in-flight jobs; what remains; open questions.
@@ -54,7 +53,7 @@ what was done, the result, the evidence, the artifacts, what remains.
    covers it and its status (done / pending / decided / answered). Any request without a section = the handoff is not done.
    Corrections and rules the user gave ("never X", "always Y") are listed too and copied into the directives section.
 4. **Artifact ledger (REQUIRED appendix).** Every file created or modified, every git branch/commit (pushed or not),
-   every screen/job/JAWS run, every DB/collection/production write, every memory/guide edit — with path/id and one-line purpose.
+   every screen/background job/batch or workflow run, every database/production write, every memory/guide edit — with path/id and one-line purpose.
 5. **Carry-forward.** Copy every still-open item from the opening summary and from the earlier handoffs it references
    into the docket, marked "carried from <doc>", unless verifiably resolved (say how).
 6. **Self-audit before replying.** Re-read the context from the top and check each topic, user message and artifact
