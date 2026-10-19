@@ -320,6 +320,8 @@ every commit, short message. This exception is ONLY for the stow repo; every Git
 
 **If the user asks you to do anything involving restricting/unrestricting a proteome, read `~/.claude/restriction-guide.md` before proceeding.**
 
+**If the user asks you to do anything involving gene families / pangenome families (BrachyPan, SorghumPan, EucyPan, …: loading families or PAV classes into CHADO, Mongo `family_<method>` family-page docs, the Families tab, pangenes/pie-chart browser tracks), read `~/.claude/pangenome-families-guide.md` before proceeding.**
+
 **If the user asks you to do anything involving BioMart (`phytozome_mart_C`, the Genomes/Families frontend, the organism filter dropdown, or ortholog/homolog loads into the mart), read `~/.claude/biomart-guide.md` before proceeding.**
 
 **⛔ ABSOLUTE RULE: BioMart orthologs are DIAMOND ONLY. NEVER go back to the old InParanoid set. NEVER.** (user, 2026-10-13)
