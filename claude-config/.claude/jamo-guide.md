@@ -166,7 +166,7 @@ Five top-level fields per Phytozome file (GenTech/raw-delivery files lack them).
   records go to a deleted collection and can be restored.
 - `jadmin` requires a USER token in `~/.jamo/token` (32 chars, `Bearer`) whose `api/core/whoami` permissions include
   `admin`; otherwise it exits "You do not have the correct access level". The token we use for scripts is the `plant`
-  APPLICATION token: `whoami` → user `plant`, permissions `[]`. Whether `api/metadata/delete` accepts it is untested.
+  APPLICATION token: `whoami` → user `plant`, permissions `[]`. `api/metadata/delete` REFUSES it (tested 2026-10-18: 403 "not authorized … method post_delete in module metadata") — deletes need an admin user token or the JAMO team.
 - What a delete does to the archived bytes is not visible in the client code — ask the JAMO team.
 - Hiding instead (no deletion): `metadata.portal = {}` (JDP drops records without `portal.display_location`).
 
