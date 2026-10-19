@@ -228,9 +228,12 @@ The `bash -lc` ensures `.bashrc` conda init is sourced so `conda activate` works
 `inparanoid_loc`. **`diamond_db/` is the one and only home of `diamondparanoid_loc` tables — always, everywhere, in
 everything** (2026-10-18: "make it universal. no more skew."): every row points into
 `/global/cfs/cdirs/plantbox/homology/inparanoid_homologs/diamond_db/`; every writer copies there. **Only tables PROVEN
-diamond go there; legacy BLAST tables NEVER do.** `all_db/` = legacy BLAST InParanoid location. Rows already under
-`diamond_db/` are accepted as diamond. Anything else not PROVEN diamond must be recomputed (its row stays in the table
-until then — never drop data). Path, date, file format and `inparanoid_loc` membership are NOT evidence either way.
+diamond go there; legacy BLAST tables NEVER do.** `all_db/` = legacy BLAST InParanoid location.
+**Correction (user 2026-10-19):** EVERY registered table lives in `diamond_db/`, proven or not ("everything in
+diamond_db"), one file per pair (overwrite, no dups); only legacy tables that are solely in `inparanoid_loc` stay out.
+**A path is NEVER proof of diamond** — being in `diamond_db/` proves nothing. Anything not PROVEN diamond must be
+recomputed (row stays until then — never drop data); list: `$SCRATCH/eucypan/move_alldb/recompute_list_*.tsv` plus the
+pre-existing diamond_db rows, which were never proven. Date, file format and `inparanoid_loc` membership are not evidence either.
 In code the directory is config, never a literal: `$HOMOLOG_DIAMOND_DB_DIR` → `config.DEFAULT_DIAMOND_DB_DIR`
 (branch `diamond-db-dest`, 2026-10-18; collect_results/store_results/run_pipeline fail if it is unset).
 

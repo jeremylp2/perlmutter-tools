@@ -51,10 +51,9 @@ Pair-file location tables in **`deploy_config_metadata`** (plant-db-5): `diamond
 > Only pairs registered in `diamondparanoid_loc` may be extracted or loaded. Never extract, load, propose loading, or
 > "fill gaps" from `inparanoid_loc` — not as a fallback, not for one pair, not for older proteomes.
 > **`diamond_db/` is the one and only home of `diamondparanoid_loc` tables** (user 2026-10-18: "universal, no more
-> skew"): every row points into `.../inparanoid_homologs/diamond_db/`, and only tables PROVEN diamond go there — legacy
-> BLAST tables NEVER do. `.../all_db/` is the legacy BLAST InParanoid location; leftover `diamondparanoid_loc` rows
-> still pointing into `all_db/` are JAWS-era skew (proven ones repointed to `diamond_db/` 2026-10-18; unproven ones stay
-> in the table until a diamond recompute replaces them — never dropped). If it is not CERTAIN a table was calculated with
+> skew"): every row points into `.../inparanoid_homologs/diamond_db/` — proven or not, one file per pair, no dups
+> (all all_db-path rows repointed 2026-10-19; unproven ones are on a recompute list, never dropped). Legacy BLAST tables
+> that are only in `inparanoid_loc` NEVER go there. **A path is NEVER proof of diamond.** If it is not CERTAIN a table was calculated with
 > diamond InParanoid (byte-identical to a known diamond run's output), it must be recomputed with diamond — path, date,
 > format and `inparanoid_loc` membership are not evidence either way. A pair with no diamond row has NOT been computed: the
 > fix is a diamond computation for that pair, never the legacy file. Report such pairs as "no diamond pair computed".

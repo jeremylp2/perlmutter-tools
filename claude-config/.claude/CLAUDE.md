@@ -333,12 +333,16 @@ diamond row was never computed: say so; the fix is a diamond run.
 - Every `diamondparanoid_loc` row points into `inparanoid_homologs/diamond_db/`. Every writer (pipeline collect /
   store, ad hoc registration, recomputes, repairs) copies the diamond table there and registers that path. Never
   `all_db/`, never anywhere else. In code the directory comes from config (`$HOMOLOG_DIAMOND_DB_DIR`), never a literal.
-- **Only tables PROVEN to be diamond InParanoid output go into `diamond_db/`. Legacy BLAST InParanoid tables NEVER,
-  NEVER, NEVER go there** — not copied, not moved, not "to make it consistent".
-- `inparanoid_homologs/all_db/` = the legacy BLAST InParanoid location (`inparanoid_loc`). `diamondparanoid_loc` rows
-  still pointing into `all_db/` are the leftover JAWS-era skew: proven ones get copied to `diamond_db/` and repointed;
-  unproven ones stay in `diamondparanoid_loc` untouched (do NOT drop data) until a diamond recompute replaces them with
-  a table in `diamond_db/`.
+- EVERY table registered in `diamondparanoid_loc` lives in `diamond_db/` — proven or not (user 2026-10-19: "the rows
+  that aren't proven still go in diamond_db. everything in diamond_db. I mean it."). No duplicates: one registered file
+  per pair, at `diamond_db/`; an old file at the target path is overwritten ("overwrite the existing diamond_db file.
+  no dups"). Never drop a row.
+- Legacy BLAST InParanoid tables that are only in `inparanoid_loc` NEVER go into `diamond_db/`.
+- **A path is NEVER proof of diamond — never, ever** (user 2026-10-19). Being in `diamond_db/` proves nothing. Unproven
+  registered tables stay on the recompute list until recomputed with diamond.
+- `inparanoid_homologs/all_db/` = the legacy BLAST InParanoid location. Done 2026-10-19: all 19,769 all_db-path
+  `diamondparanoid_loc` rows repointed into `diamond_db/` (0 left); unproven ones listed in
+  `$SCRATCH/eucypan/move_alldb/recompute_list_*.tsv`.
 **If you are not CERTAIN a table was calculated with diamond InParanoid, it must be RECOMPUTED with diamond** (user,
 2026-10-13). Certain = byte-identical to the output of a run known to use diamond (a JAWS `-cores-diamond` run, or a
 pre-JAWS run whose directory still holds its diamond output). Path, folder, date, file format and `inparanoid_loc`
