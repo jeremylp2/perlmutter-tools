@@ -70,6 +70,30 @@ curl.post('api/metadata/file',
 - A new record ingests through `REGISTERED-INGEST` → `BACKUP_READY`/`BACKUP_COMPLETE` (file_name populates once ingested).
 - Easiest correct metadata for a new file: copy the full `metadata` dict from a sibling already-registered file of the same proteome, then override `type/subtype/content/format`, `portal`, and the filename-specific bits.
 
+## Replacing the CONTENT of an existing record (updated file, same name) — proven 2026-10-18
+
+When a staging file was regenerated (e.g. `<…>.P14.annotation_info.txt.gz`) and JAMO already has exactly one current
+record with that `file_name`:
+1. Find the record: pagequery `{'metadata.phytozome.phytozome_genome_id': pid, 'file_name': <basename>}` → must be 1.
+2. `full = curl.get(f'api/metadata/file/{id}')`; destination = `full['file_path']` minus `/global/dna/dm_archive/plant/`
+   + `/` + `full['file_name']`.
+3. Readability: if you own the file, chmod 664/775 (above). If another user owns it (cannot chmod), REQUIRE the file
+   world-readable and every dir up to portalStaging world r-x — that is all ingest needs.
+4. `curl.post('api/metadata/file', file=local, file_type=full['file_type'], put_mode='Replace_If_Newer',
+   destination=dest, source=hostname, metadata=full['metadata'])` — re-send the record's OWN full metadata unchanged
+   (keeps portal/phytozome/analysis_project). Returns the SAME `metadata_id`.
+5. Poll `api/metadata/file/{id}` until `file_size` and `md5sum` equal the local file (≈3–4 min; ends BACKUP_READY).
+Test on one proteome first. Script: `$SCRATCH/jamo_annotinfo_20261018/replace_annotinfo.py`.
+
+## Non-P14 analysis files (user rule, 2026-10-18)
+
+If a proteome has P14 versions (`.P14.annotation_info.txt.gz`, `.P14.defline.txt.gz`, `.P14.analysis.xml.gz`,
+`.P14.analysis.tsv.gz`), every NON-P14 version of those four types must have `phytozome_release_id = ['13']` (never
+'current', never '14') and `portal = {}` (no project at all, incl. FD data-portal projects) — never restore.
+Read-modify-write the full `phytozome` block; verify a CURRENT P14 counterpart exists before each change.
+Scan (read-only) + fix scripts: `$SCRATCH/jamo_nonp14_scan/` (`scan_v14.py`, `set_rel13.py`). Proteomes WITHOUT P14
+files: ask the user (retiring leaves no current file).
+
 ## metadata.portal — what the Phytozome browser/JDP index on
 
 ```python
