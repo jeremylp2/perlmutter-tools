@@ -93,9 +93,18 @@ JAMO being correct does NOT mean data.jgi.doe.gov shows it. JDP serves from its 
   `_id` (JAMO id), `file_size`, `md5sum`, `file_status`, `modified_date` (= JDP's last index refresh of that doc).
 - `https://files.jgi.doe.gov/search/?q=<file_name>&api_version=2`
 After any JAMO content/metadata change, compare JDP's `file_size`/`md5sum` with JAMO's; a stale `modified_date` = not yet
-reindexed. JDP does NOT show every portal-tagged current record (2026-10-18, pid 924: 22 JAMO records, 18 in JDP; e.g.
-one of two identical-name softmasked twins hidden, both hardmasked twins hidden) — selection rule under investigation;
-see memory `jamo_jdp_visibility.md` / `jdp_visibility_diagnostic.md`. Before retiring a duplicate, check WHICH twin JDP shows.
+reindexed.
+
+**JDP selection gate (verified 2026-10-18, 32 genomes / 1,802 records, `$SCRATCH/jamo_924/xprot.py` + `xprot.log`):**
+a record is in JDP only if `metadata.portal.display_location` is present and non-empty. `portal.identifier` alone is NOT
+enough: 744 records with identifier but no display_location → 0 in JDP; 1,058 with display_location → 1,057 in JDP. The
+one exception (311 `65370153…`) carries an AP snapshot `analysis_project.visibility=Private`/`status_name=Abandoned`/AP
+`data_utilization_status=Restricted` — the known embargo gate. NOT gates: `file_status` (PURGED files are shown),
+`phytozome_release_id` (a `['todelete']` CHADO.log is shown), `phytozome.project`, `__update_publish_to` (top-level JAMO
+change log; 519 of the 744 carry an entry `display_location from "Phytozome/PhytozomeV14/<Gspecies>" to ""` recording
+when the display_location was cleared; 225 lack display_location with no such entry). Before retiring a duplicate, check
+WHICH twin JDP shows and whether the keeper has `display_location`. Compare JDP's own stored copy (its `metadata.portal`)
+with JAMO's — a full-doc diff done AFTER a write compares the post-write state and misses the pre-write gate.
 
 ## Non-P14 analysis files (user rule, 2026-10-18)
 
