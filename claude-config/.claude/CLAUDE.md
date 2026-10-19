@@ -87,6 +87,14 @@ After any change to `njp_content` or `njp_content_dev`, always fetch the live pa
 - **Any other tool**: use environment variables, config files, or secret managers — never inline secrets in the command.
 - This rule applies to all commands Claude runs directly, generates for scripts, or suggests to the user.
 
+## ABSOLUTE RULE: Never hardcode full paths in code — always config parameters
+
+**Absolute filesystem paths never appear as literals in code** — not module constants, not argparse defaults, not
+"just for now". They come from config parameters (the project's config mechanism: a config file key or an
+environment variable read by its config module, failing loudly when unset). Relative paths can sometimes be OK.
+(user, 2026-10-18: "hardcoding full paths is never acceptable … always config parameters".) When you touch code that
+has one, move it to config instead of editing the literal.
+
 ## ABSOLUTE RULE: Never commit credentials to git
 
 **THIS IS THE SINGLE MOST IMPORTANT RULE. VIOLATING IT IS A SECURITY INCIDENT.**
@@ -316,11 +324,19 @@ every commit, short message. This exception is ONLY for the stow repo; every Git
 
 **⛔ ABSOLUTE RULE: BioMart orthologs are DIAMOND ONLY. NEVER go back to the old InParanoid set. NEVER.** (user, 2026-10-13)
 Only pairs registered in `deploy_config_metadata.diamondparanoid_loc` may be extracted or loaded. Never use
-`inparanoid_loc` — not as a fallback, not for one pair, not for old proteomes, not to "fill a gap". Diamond tables
-belong in `inparanoid_homologs/diamond_db/` (user: "diamond_db is the right spot"). `inparanoid_homologs/all_db/` is
-the legacy InParanoid location; `diamondparanoid_loc` rows whose path points into `all_db/` (written by the JAWS
-pipeline's collect step) are diamond tables in the WRONG place — to be moved to `diamond_db/`, never a reason to read
-`inparanoid_loc`. A pair without a diamond row was never computed: say so; the fix is a diamond run.
+`inparanoid_loc` — not as a fallback, not for one pair, not for old proteomes, not to "fill a gap". A pair without a
+diamond row was never computed: say so; the fix is a diamond run.
+**⛔ `diamond_db/` IS THE ONE AND ONLY HOME OF `diamondparanoid_loc` TABLES — ALWAYS, EVERYWHERE, IN EVERYTHING.**
+(user, 2026-10-13 + 2026-10-18: "make diamond_db the right spot. make it universal. no more skew.")
+- Every `diamondparanoid_loc` row points into `inparanoid_homologs/diamond_db/`. Every writer (pipeline collect /
+  store, ad hoc registration, recomputes, repairs) copies the diamond table there and registers that path. Never
+  `all_db/`, never anywhere else. In code the directory comes from config (`$HOMOLOG_DIAMOND_DB_DIR`), never a literal.
+- **Only tables PROVEN to be diamond InParanoid output go into `diamond_db/`. Legacy BLAST InParanoid tables NEVER,
+  NEVER, NEVER go there** — not copied, not moved, not "to make it consistent".
+- `inparanoid_homologs/all_db/` = the legacy BLAST InParanoid location (`inparanoid_loc`). `diamondparanoid_loc` rows
+  still pointing into `all_db/` are the leftover JAWS-era skew: proven ones get copied to `diamond_db/` and repointed;
+  unproven ones stay in `diamondparanoid_loc` untouched (do NOT drop data) until a diamond recompute replaces them with
+  a table in `diamond_db/`.
 **If you are not CERTAIN a table was calculated with diamond InParanoid, it must be RECOMPUTED with diamond** (user,
 2026-10-13). Certain = byte-identical to the output of a run known to use diamond (a JAWS `-cores-diamond` run, or a
 pre-JAWS run whose directory still holds its diamond output). Path, folder, date, file format and `inparanoid_loc`

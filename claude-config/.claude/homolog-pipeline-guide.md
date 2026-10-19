@@ -63,7 +63,8 @@ and restored 2026-06. Full detail + backfill procedure: `homolog-orthotype-guide
 | `/pscratch/sd/p/phillips/inparanoid/` | Working dir (has local copies of scripts during dev) |
 | `/pscratch/sd/p/phillips/inparanoid/defline/output_files/` | Defline TSV.gz files (canonical — value of `config.DEFAULT_DEFLINE_DIR`) |
 | `/pscratch/sd/p/phillips/inparanoid/homologs/output_json/` | mongoloader JSON files (after extract) |
-| `/global/cfs/cdirs/plantbox/homology/inparanoid_homologs/all_db/{pid}/` | Persistent inparanoid table files |
+| `/global/cfs/cdirs/plantbox/homology/inparanoid_homologs/diamond_db/{pid}/` | Persistent DIAMOND InParanoid table files — the ONLY place `diamondparanoid_loc` rows may point (code: `$HOMOLOG_DIAMOND_DB_DIR`, `config.DEFAULT_DIAMOND_DB_DIR`) |
+| `/global/cfs/cdirs/plantbox/homology/inparanoid_homologs/all_db/{pid}/` | LEGACY BLAST InParanoid tables (`inparanoid_loc`). Never write diamond tables here; never copy anything from here into `diamond_db/` unless proven diamond |
 | `/global/cfs/cdirs/plantbox/phytzm-jaws/phillips/{jaws_run_id}/{cromwell_id}/` | JAWS output dirs (per submission) |
 
 ## Proteome status fields (MySQL `deploy_config_metadata.proteome_progress`)
@@ -224,10 +225,14 @@ The `bash -lc` ensures `.bashrc` conda init is sourced so `conda activate` works
 ## Diamond ortholog tables (`diamondparanoid_loc`) — rules, proof, safe registration (2026-10-13)
 
 **Rules (user):** BioMart/ortholog consumers use ONLY `deploy_config_metadata.diamondparanoid_loc` rows, never
-`inparanoid_loc`. Diamond tables belong in `/global/cfs/cdirs/plantbox/homology/inparanoid_homologs/diamond_db/`
-(`all_db/` is the legacy InParanoid location; diamond rows pointing into `all_db/` are misplaced). Rows already under
-`diamond_db/` are accepted as diamond. Anything else not PROVEN diamond must be recomputed. Path, date, file format and
-`inparanoid_loc` membership are NOT evidence either way.
+`inparanoid_loc`. **`diamond_db/` is the one and only home of `diamondparanoid_loc` tables — always, everywhere, in
+everything** (2026-10-18: "make it universal. no more skew."): every row points into
+`/global/cfs/cdirs/plantbox/homology/inparanoid_homologs/diamond_db/`; every writer copies there. **Only tables PROVEN
+diamond go there; legacy BLAST tables NEVER do.** `all_db/` = legacy BLAST InParanoid location. Rows already under
+`diamond_db/` are accepted as diamond. Anything else not PROVEN diamond must be recomputed (its row stays in the table
+until then — never drop data). Path, date, file format and `inparanoid_loc` membership are NOT evidence either way.
+In code the directory is config, never a literal: `$HOMOLOG_DIAMOND_DB_DIR` → `config.DEFAULT_DIAMOND_DB_DIR`
+(branch `diamond-db-dest`, 2026-10-18; collect_results/store_results/run_pipeline fail if it is unset).
 
 **Proving a table was computed with diamond:** read the JAWS run's `<output_dir>/metadata.json` (Cromwell metadata,
 returned to CFS even for dori runs). For `calls['diamond_homologs.run_inparanoid']` shard N require:
@@ -252,9 +257,11 @@ every copy verified; post-check one row per pair pointing at an md5-identical fi
 an existing unproven file is renamed aside (`*.unverified_<date>`) only with user OK. Reference:
 `$SCRATCH/fix_716_533/register_tables.py`.
 
-**Known pipeline traps (as of 2026-10-14, not yet fixed in code):**
+**Known pipeline traps (as of 2026-10-14, not yet fixed in code unless noted):**
+- JAWS call caching is ON by default and `prepare_jaws.submit_to_jaws` doesn't disable it; `jaws submit --no-cache`
+  turns it off (every shard executes → outputs in `execution/`, direct proof). Use `--no-cache` for ad hoc runs.
 - `wdl/collect_results.py copy_table_files` globs only `shard-*/execution/table_*.txt` → misses call-cached shards
-  (e.g. 1062 registered 1 of 346); copies to `all_db/` (wrong place); if the destination already exists it skips the
+  (e.g. 1062 registered 1 of 346); copied to `all_db/` (fixed 2026-10-18 → `$HOMOLOG_DIAMOND_DB_DIR`); if the destination already exists it skips the
   copy and still registers that (possibly legacy) file. `store_results.py` (pre-JAWS) has the same skip-if-exists flaw.
 - `homolog_blast_compute`/`inparanoid_computes` go DONE when the run validates — nothing checks that every expected
   partner (released≥1, not skip-listed) has a diamond row. 716 sits on `skip_list.txt`.
