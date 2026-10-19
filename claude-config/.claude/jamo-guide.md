@@ -157,6 +157,19 @@ Five top-level fields per Phytozome file (GenTech/raw-delivery files lack them).
 
 `metadata.phytozome`: `Gspecies`, `proteome_id`/`phytozome_genome_id`, `proteome_name`, `version`, `annotation_version`, `assembly_version`, `data_release_policy` (restricted|unrestricted), `phytozome_release_id` (e.g. `['14','current']`). To **deprecate** an old/duplicate file: set `portal={}` AND `phytozome.phytozome_release_id=['13']` (drops it from current release) — see `jamo_file_replacement_guide.md`.
 
+## Deleting a JAMO record (not just hiding it) — what the client code shows (read 2026-10-18)
+
+- No `jamo` CLI subcommand deletes (`jamo help`: fetch/info/keys/link/report/show only).
+- `jadmin delete metadata where <clause>` (`/global/common/software/m342/jamo/prod/bin/jadmin.py`) → POST
+  `api/metadata/delete` with the query; it lists matching records and asks v/a/c, then y/n (interactive). Reverse:
+  `jadmin undelete metadata where <clause>` → `api/metadata/undelete`, reading from source `deleted_file` — i.e. deleted
+  records go to a deleted collection and can be restored.
+- `jadmin` requires a USER token in `~/.jamo/token` (32 chars, `Bearer`) whose `api/core/whoami` permissions include
+  `admin`; otherwise it exits "You do not have the correct access level". The token we use for scripts is the `plant`
+  APPLICATION token: `whoami` → user `plant`, permissions `[]`. Whether `api/metadata/delete` accepts it is untested.
+- What a delete does to the archived bytes is not visible in the client code — ask the JAMO team.
+- Hiding instead (no deletion): `metadata.portal = {}` (JDP drops records without `portal.display_location`).
+
 ## Restore from tape (PURGED files)
 
 `file_status: PURGED` = bytes on tape only. Restore submits to `api/tape/grouprestore`; status goes PURGED → RESTORE_REGISTERED → RESTORE_IN_PROGRESS → RESTORED/on-disk over minutes-to-hours.
