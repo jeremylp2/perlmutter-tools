@@ -85,6 +85,18 @@ record with that `file_name`:
 5. Poll `api/metadata/file/{id}` until `file_size` and `md5sum` equal the local file (≈3–4 min; ends BACKUP_READY).
 Test on one proteome first. Script: `$SCRATCH/jamo_annotinfo_20261018/replace_annotinfo.py`.
 
+## What the DATA PORTAL (JDP) actually shows — its own index, lags JAMO
+
+JAMO being correct does NOT mean data.jgi.doe.gov shows it. JDP serves from its own index, refreshed on its own schedule
+(observed refresh stamps days apart). Check what JDP holds, not JAMO:
+- `https://files.jgi.doe.gov/phytozome_file_list/?api_version=2&genome_id=<pid>` — per-genome file list; each file has
+  `_id` (JAMO id), `file_size`, `md5sum`, `file_status`, `modified_date` (= JDP's last index refresh of that doc).
+- `https://files.jgi.doe.gov/search/?q=<file_name>&api_version=2`
+After any JAMO content/metadata change, compare JDP's `file_size`/`md5sum` with JAMO's; a stale `modified_date` = not yet
+reindexed. JDP does NOT show every portal-tagged current record (2026-10-18, pid 924: 22 JAMO records, 18 in JDP; e.g.
+one of two identical-name softmasked twins hidden, both hardmasked twins hidden) — selection rule under investigation;
+see memory `jamo_jdp_visibility.md` / `jdp_visibility_diagnostic.md`. Before retiring a duplicate, check WHICH twin JDP shows.
+
 ## Non-P14 analysis files (user rule, 2026-10-18)
 
 If a proteome has P14 versions (`.P14.annotation_info.txt.gz`, `.P14.defline.txt.gz`, `.P14.analysis.xml.gz`,
