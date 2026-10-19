@@ -29,6 +29,40 @@ rediscovering anything or being misled. It is NOT done unless it meets ALL 12 po
 completeness sweep. This bar exists because thin handoffs cost real hours: fresh sessions kept testing
 STALE deployments and trusted DERIVED claims as fact.
 
+## ⛔ SCOPE = THE ENTIRE CONTEXT, EVERY TIME. NEVER "THE CURRENT TASK." (user, 2026-10-19 — non-negotiable)
+
+**Failure that must never repeat:** a handoff written about only the task in progress (EucyPan), silently omitting every
+other workstream in the same context (an end-to-end pipeline test + code fix, a production push, a cleanup, research
+findings, open items carried from earlier handoffs). The user: "When I say everything I mean everything. The handoff has
+to be incredibly comprehensive and cover the whole context. every time. without exception. this can never happen again."
+
+**The scope is ALWAYS the whole context window, from its very first message to now** — including the compaction summary
+at the top (if the context started from one) and every earlier handoff it points to. "The current task" is ONE section
+of the handoff, never the handoff. A topic you consider finished, minor, side-tracked or unrelated STILL gets its section:
+what was done, the result, the evidence, the artifacts, what remains.
+
+**Mandatory mechanics (do all of them, in this order, before calling the handoff done):**
+1. **Context inventory first.** Before composing prose, walk the entire context chronologically and list every
+   workstream/topic touched (e.g. "JBPrivate→IGB sync test", "public browsers → IGB push", "SorghumPan trackList dedup",
+   "EucyPan families", "Mongo exporter rewrite", "memory/guide updates"), plus everything inherited from the opening
+   summary / prior handoffs. Each becomes a section. When unsure whether something is a separate topic, make it one.
+2. **Per-topic section contents (every topic, no exceptions):** goal as the user stated it; chronological steps taken;
+   results with evidence (commands/counts/ids/commits/run ids/digests); user decisions about it; artifacts (paths, branches,
+   commits pushed or not); in-flight jobs; what remains; open questions.
+3. **User-request ledger (REQUIRED appendix).** A numbered list of EVERY user message in the context (requests,
+   corrections, decisions, questions — paraphrased in one line each, in order), each mapped to the handoff section that
+   covers it and its status (done / pending / decided / answered). Any request without a section = the handoff is not done.
+   Corrections and rules the user gave ("never X", "always Y") are listed too and copied into the directives section.
+4. **Artifact ledger (REQUIRED appendix).** Every file created or modified, every git branch/commit (pushed or not),
+   every screen/job/JAWS run, every DB/collection/production write, every memory/guide edit — with path/id and one-line purpose.
+5. **Carry-forward.** Copy every still-open item from the opening summary and from the earlier handoffs it references
+   into the docket, marked "carried from <doc>", unless verifiably resolved (say how).
+6. **Self-audit before replying.** Re-read the context from the top and check each topic, user message and artifact
+   against the ledgers. Fix gaps. Then report in chat: "<N> topics, <M> user requests, <K> artifacts covered" — the
+   numbers come from the ledgers, not from a guess.
+
+A focused "state of the current task" doc is NOT a handoff. Length is not a problem; omission is.
+
 ## THE GOVERNING PRINCIPLE (this is the whole job)
 
 **Compaction wipes in-context memory. The handoff's ENTIRE purpose is that nothing core, critical, or
@@ -120,6 +154,11 @@ Every single thing you've learned in the session, everything done in the session
 state, everything that lead up to that state, everything about pending and future jobs should all be there. 
 Err heavily on the side of writing too much. Allow nothing to be forgotten. Nothing. 
 
+**The sweep is checked against the ledgers (see SCOPE section):** every topic in the context inventory has a section;
+every user message in the context is in the user-request ledger with its section and status; every artifact is in the
+artifact ledger; every open item from the opening summary/prior handoffs is carried into the docket. If ANY check fails,
+the handoff is not done — fix it before replying. Never present a single-task document as the handoff.
+
 ## Close — DOC vs LIVE CHAT (keep these separate)
 
 **In the handoff DOC:** end it by naming, one line each, the THREE most dangerous things a fresh session
@@ -127,7 +166,9 @@ could get wrong. (The doc contains points 1–12 + these three.)
 
 **In the LIVE CHAT reply to the user (NOT written into the doc):** after writing the file, send the user, in
 the conversation:
-- the path the handoff was written to, and
+- the path the handoff was written to,
+- the coverage counts from the ledgers ("<N> topics, <M> user requests, <K> artifacts covered") and the list of topic
+  section titles, so the user can see at a glance that the whole context is there, and
 - a ready-to-paste **POST-COMPACT RESUME INSTRUCTION** as its own clearly-marked block ("**After compact,
   paste this:**"). It lives in the chat — NOT in the doc — because the user must have it in-hand to paste
   back after the compact wipes context; a copy buried in the file is useless to them at that moment.
