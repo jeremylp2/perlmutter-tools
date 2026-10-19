@@ -50,6 +50,18 @@ How a deployed private JBrowse browser, and its login, reach IGB. Verified 2026-
   dna jbprivate/ → IGB private/. ~1.5–2 h per run; ends `partial=1` routinely (receiver permission-denied files
   in Stexanusvar_Basel18_female_v1_1). Log `~/jbprivate-sync/sync.log`.
 
+## Public browsers → IGB (prod) — added 2026-10-09
+- IGB public tree: host `/plant/share/jbrowse/public` = pod `zome-jbrowse` (ns igb-dev) `/jbrowse/genomes`; owned by
+  svc-plant (uid 91278), writable by the push key. Wrapper `/usr/local/bin/jbprivate-rsync-recv` now also allows
+  `"$PUB"|"$PUB"/|"$PUB"/*` with `PUB=/plant/share/jbrowse/public` (user edited as root; backups `.bak.YYYYMMDD[_HHMM]`).
+  Long sed one-liners pasted into a terminal can wrap and break — give the user short lines.
+- Push pattern (`/pscratch/sd/p/phillips/mkjb/_igbsync/public_push/push_public.sh`): rsync each browser dir with the sweep's
+  flags, then `fulldataset.json` LAST (only if all browsers succeeded). Verify per browser: file list + sizes on IGB == dna
+  (`kubectl exec … find … -exec stat -c '%s %n' {} +`), fulldataset md5 identical, public URL trackList/refSeqs 200.
+- dev SPIN serves browsers straight from dna; prod (phytozome-next) serves from IGB. Nothing syncs public dna→IGB
+  automatically (as of 2026-10-09) — new public browsers must be pushed. Every change to a public browser on prod must go to
+  BOTH dna and IGB.
+
 ## Traps
 - `deploy_private_jbrowse.py --json <JAWS outputs.json>`: `JBPrivate.final_tar` is RELATIVE
   (`./call-coverAndZip/execution/<name>.tar`); the cp runs via `ssh dtn01`, whose cwd is the remote HOME, so it fails
