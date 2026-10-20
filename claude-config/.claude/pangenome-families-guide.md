@@ -62,8 +62,12 @@ loaded, exported and wired into the site. Read with `phytozome-chado-guide.md`, 
   SorghumPan lost families 140078905–140079004. Its scripts contain plaintext passwords — never print them.
 
 ## Families tab wiring (njphytozome.json)
-- Clade `searchNode.chado_id` comes from a `deploy_node` row (clade_id, chado_id, chado_name, proteomes) and requires
-  release_metadata `inFamilies` for those proteomes; generated ONLY by `deploy_config_metadata/bin/update_njphytozome.sh
+- Clade `searchNode.chado_id` comes from a `deploy_node` row (clade_id, chado_id, chado_name, proteomes); `inFamilies`
+  rows are NOT needed (reportClientSideConfig.pl only complains when inFamilies is DEFINED and false for a node member;
+  deploy 58 has none at all). EucyPan dev recipe (2026-10-20, deploy 58): INSERT deploy_clade 'EucyPan' (parent Rosid) →
+  add_proteomes_to_deployment.py (clade EucyPan) → INSERT deploy_node (6002,'EucyPan','EUCYPAN',…,clade) → groupId
+  'eucypan,standard' for members → regenerate. Frontend also needs projectDetails in config/njphytozome.js and a logo
+  build/assets/logo-JGI-<project>.svg (path-drawn artwork). Generated ONLY by `deploy_config_metadata/bin/update_njphytozome.sh
   <tag>` (wrapper, untracked) → `reportClientSideConfig.pl`. `additionalClusterNodes` are copied from the existing file,
   never generated. Never hand-edit njphytozome.json.
 

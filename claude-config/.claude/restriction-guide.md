@@ -13,7 +13,7 @@ Changing a proteome's restriction status touches **four systems** — update all
 
 ## 1. njphytozome.json (`~/git/zome-clientside/config/njphytozome.json`)
 
-- Field: `dataPolicy` — a **direct key on each organism node** (NOT under `attributes`). Match the node by its `phytozome_genome_id`.
+- Field: `dataPolicy` — under each organism node's `attributes` (verified in the 2026-10 trunk file; earlier notes said a direct key — check the current file). Match the node by its `proteomeId`.
 - `jq --sort-keys` style, 2-space indent. For a minimal diff, do a **targeted line edit** flipping only the `dataPolicy` line nearest above each target `phytozome_genome_id` (don't reserialize the whole file).
 - Branches: dev = `trunk`, prod = `production-14.0`. Edit whichever branch(es) the proteome is deployed to. **Dev-only genomes → edit `trunk` only** (they aren't in production-14.0 yet).
 - Commit `Unrestrict <comma-separated PIDs>` (no Co-Authored-By). Push the branch(es) edited.
