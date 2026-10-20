@@ -30,6 +30,23 @@ The token in `~/.starburst_jwt` is an **encrypted JWE backed by a server-side ST
 - `502` / `PAGE_TRANSPORT` errors are transient coordinator hiccups, not auth — just retry.
 - The token must **never** appear on a command line (it's a credential). Read it from the file.
 
+### Cloudflare Access token (`~/.cf_access_token`) — needed from Perlmutter on EVERY request
+
+- From Perlmutter, `lakehouse.jgi.lbl.gov` sits behind **Cloudflare Access**. Every request must ALSO carry
+  header `cf-access-token: <contents of ~/.cf_access_token>`, or it gets **HTTP 302 →
+  `jgi.cloudflareaccess.com/cdn-cgi/access/login/...`** (the trino client then dies with
+  `orjson.JSONDecodeError: unexpected character: line 1 column 1` — that error = expired/missing CF token,
+  NOT a Starburst problem; refreshing `~/.starburst_jwt` does not fix it).
+- **It expires after a few days** (it is a JWT; its `exp` claim says when — decode the middle part to check;
+  the 2026-10-06 token expired 2026-10-09).
+- **Refresh = the user runs `cloudflared`** (user did this 2026-10-19), on a machine with a browser:
+  `cloudflared access login https://lakehouse.jgi.lbl.gov` then
+  `cloudflared access token -app=https://lakehouse.jgi.lbl.gov` (prints the token), and saves it on
+  Perlmutter with `cat > ~/.cf_access_token` (paste, Ctrl-D) + `chmod 600`. Claude cannot do this itself
+  (browser login). Never put the token on a command line.
+- Diagnose without printing secrets: `requests.get('https://lakehouse.jgi.lbl.gov/v1/info', headers=...,
+  allow_redirects=False)` → 302 to cloudflareaccess = CF token bad; 401 = Starburst session lapsed (`/ui/token`).
+
 ---
 
 ## 3. Connecting
