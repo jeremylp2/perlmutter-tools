@@ -80,3 +80,22 @@ loaded, exported and wired into the site. Read with `phytozome-chado-guide.md`, 
   (link `/report/family/<Pan>/<id>`).
 - GFF exporter (`exportGFFFromChado.pl`) writes clusterClass on the GENE line only; jbrowse-primary/alt styles have no
   gene line → transcript coloring needs the class on the mRNA.
+
+## Family MSAs / trees / HMMs (EucyPan 2026-10-19; recipe reproduces stored SorghumPan trees+HMMs exactly)
+- Sequences: CHADO polypeptide residues of the family members, trailing '*' removed, FASTA header = bare PAC id.
+- MSA: `muscle -align` (MUSCLE 5.1, chado conda env) for families with >= 2 members. Stored SorghumPan MSAs differ from
+  MUSCLE 5.1/5.2 output only in gap placement (version that made them unknown).
+- Tree: FastTree 2.1.11, default options, families with >= 4 members (SorghumPan rule; user OK'd the threshold).
+- HMM: `hmmbuild --amino -n <family uniquename>` (HMMER 3.3.2, shifter image doejgi/hmmer by digest), >= 2 members.
+- GENESPACE/OrthoFinder output has NO MSAs or HMMs: GENESPACE's run_orthofinder.R hardcodes the OrthoFinder command (no
+  `-M msa`), so its trees are DendroBLAST distance trees per OG; HOGs are only rows in Phylogenetic_Hierarchical_Orthogroups/N0.tsv.
+- Storage (CHADO): grpprop cluster_alignment = family FASTA wrapped at 60, ending '\n', rows in member rank order;
+  grpprop cluster_hmm = model text WITHOUT the final '//' line (API /hmm/cluster/<id> appends '//'); grpprop cluster_tree =
+  Newick, no trailing newline; grpmemberprop cluster_alignment = each member's aligned row, unwrapped. All rank 0.
+  The MSA API (/cluster/msa/<id>) and BioMartClusters.pm read ONLY the member rows — a family without them shows an empty MSA.
+- Loader: compgen family-export-python `data_wrangling/CHADOio/loaders/load_family_alignments.py` (one transaction,
+  add-only, refuses if any already exist, --check-only, verifies counts + total lengths + exact read-back sample).
+- Build at scale: per-family worker inside the hmmer container, cost-balanced lists (LPT on (n*meanLen)^2), 2 interactive
+  nodes x 120 workers did 87k families in 1.5 h; one output file per family, written .tmp then renamed.
+- API routes: /api/db/cluster/msa/<id>, /api/db/cluster/tree/<id>, /api/db/hmm/cluster/<id> (zome-webservices
+  dbservices/api/swagger.yaml).
