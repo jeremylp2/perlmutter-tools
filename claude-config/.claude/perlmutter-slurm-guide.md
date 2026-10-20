@@ -153,6 +153,11 @@ echo \"salloc exit=\$? at \$(date)\" >> $LOG"
 - Entries run as `cron`-QOS jobs. **`REQUEUED` is their normal state between runs** — not an error;
   the `ExitCode` column is the last run's result (*observed 2026-10-01*: scrontab entries showing
   `REQUEUED 1:0`, and `REQUEUED 0:125` with the `.batch` step `OUT_OF_MEMORY`).
+- **Schedule times are UTC; `squeue %S` shows local time (PDT = UTC−7).** *Observed 2026-10-19*: `0 */6` →
+  start 23:00 PDT (06:00 UTC), `0 */4` → 01:00 PDT, `17 3 * * *` → 20:17 PDT. So `0 */2` = ODD local hours (PDT).
+  **Range-with-step (`1-23/2`) did NOT give odd UTC hours** — it scheduled 06:00 UTC like `*/2`. List hours
+  explicitly (`0 1,3,5,…,23 * * *` → even PDT hours; verified start 22:00 PDT). Always check the next start
+  after an edit: `squeue -u <user> -o '%i %S %T %j'` (each edit re-registers the entry under a new job id).
 - `scontrol release` / plain `scancel` do not work on scrontab jobs; `scancel --cron` DISABLES the entry.
 - **Stuck held** — `squeue -u $USER --qos=cron` shows reason `(user env retrieval failed requeued held)`:
   - `scontrol release <id>` fails (`Cannot modify scrontab jobs through scontrol`).
