@@ -108,6 +108,13 @@ loaded, exported and wired into the site. Read with `phytozome-chado-guide.md`, 
 1. Families: decide grouping + PAV classes from the source (e.g. GENESPACE globHOG); map members to CHADO PAC ids per proteome.
 2. CHADO families: load_pan_families.py (dev rehearsal → prod, one transaction, --check-only first).
 3. Family MSAs/trees/HMMs: build per family (recipe above) → load_family_alignments.py (dev rehearsal → prod); check live API.
+3b. Family names (user, 2026-10-20 — do NOT copy other pans): grp.name = the member defline held by MORE THAN HALF of all members
+   (curated else provisional; "(N of M) " stripped); otherwise the defline of the best-scoring member against the family's OWN HMM
+   (method's own HMMs only). Keep the source id (e.g. HOG) as a grpprop. Then refresh Families-tab table + Mongo family docs.
+3c. hmmsearch hit tables for the new method (MISSED for EucyPan until asked): stage the method's HMMs/MSAs/FASTAs +
+   `<node>_cluster_forchado` into JAWS refdata plantfam (dtn01; pzpipelines/hmmsearch/jaws/PIPELINE_GUIDE.md), run the JAWS
+   hmmsearch for that method over its proteomes, load_jaws_results.py → denormalized.hmm_constituent_jsonb_<m> +
+   hmm_nonconstituent_jsonb_<m>. The cron's method map (mm_nopan) covers only clade methods 5260–5275, never pans.
 4. Families-tab table: generate_family_table('<method>') in one guarded transaction (proven no-op DROP).
 5. Microsynteny: insert pac_synteny_view rows for the member proteomes (base tables; protein_family matview lacks new methods).
 6. Mongo family pages: export_family_records.py export (current set, provisional-defline fallback) → load NEW family_<method>.
