@@ -109,6 +109,10 @@ are missing — non-atomically.** Running many pairs in parallel against shared 
 failed with "<genome>.fa.fai may not be writable"). Before ANY parallel liftoff run: build every genome's `.fai` and every
 target's `.mmi` (`minimap2 -d T.fa.mmi T.fa -a --end-bonus 5 --eqx -N 50 -p 0.5`, temp name then mv) with ONE process,
 verify all exist, and have the job script refuse to start if any is missing.
+**⛔ ALSO: liftoff without `-db` runs `gffutils.create_db(<source gff>+"_db", force=True)` BESIDE THE SOURCE GFF on every run**
+(~600 MB sqlite for a Eucalyptus GFF). Concurrent pairs sharing a source GFF delete/rebuild each other's DB → crashes
+(`UnboundLocalError: feature_db`) and silently suspect outputs. Fix: symlink the GFF into the pair's own work dir and pass
+`-g $WD/src.gff` (DB lands at `$WD/src.gff_db`, delete it after), and keep `genome/` + `gff/` dirs `chmod a-w` during runs.
 
 Code: `/pscratch/sd/p/phillips/liftoff/` (scratch, not yet in git; old copies in
 `~/git/compgen/analysis/liftoff` use the obsolete tarball input).
