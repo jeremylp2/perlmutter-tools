@@ -19,6 +19,12 @@ This:
 4. All output goes to a log file
 5. Survives SSH disconnects and Claude Code session exits
 
+**⛔ The allocation lives exactly as long as the `salloc` command (its first `srun` step). Extra work added later with
+`srun --jobid=<id> --overlap ...` is KILLED (step CANCELLED, signal 15) the moment that first step exits — however much time
+is left.** (2026-10-20: a second launcher added to a running build allocation lost 13 in-progress browser builds when the
+first launcher's queue drained and it exited.) To add work to a running allocation: only if the first step is guaranteed to
+outlive it; otherwise start a NEW allocation (max 2 interactive jobs) whose only step is the new work.
+
 ## Checking status
 
 ```bash
