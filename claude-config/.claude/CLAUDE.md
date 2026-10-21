@@ -60,6 +60,14 @@ Twice. The user: "no simultaneous parallel writes to the same file. no more. non
 - Never replace, truncate, rename or rewrite a file another process has open or may write. Never "repair" a live file.
 - O_APPEND is NOT safe across NFS clients (GPFS/Lustre/VAST/CFS/pscratch). Treat any shared-file append as corruption.
 - Before launching ANY parallel job, list every file each process writes and prove each path has exactly one writer.
+- **⛔ Hidden writers: tools that lazily build an index NEXT TO A SHARED INPUT** — pyfaidx/`samtools faidx` `.fai`,
+  liftoff/minimap2 `.mmi`, tabix `.tbi`/`.csi`, `bwa`/`bowtie2` indexes, BLAST db files, `.gzi`. Several parallel jobs
+  reading the same FASTA each try to create the same index → race ("<x>.fa.fai may not be writable", truncated `.mmi`).
+  Hit repeatedly, again 2026-10-20 (EucyPan liftoff: 13 Perlmutter pairs + 1 dori pair failed on `<genome>.fa.fai`).
+  **Every time:** build every such index ONCE, by a single process, before any parallel run (temp name then rename), verify
+  each exists, and make the parallel job script REFUSE to start if any is missing. (Alternative: each job reads its own
+  private copy in its own directory.) "Each job writes only its own outputs" is NOT enough — check what the tools write
+  beside their INPUTS.
 
 ## ABSOLUTE RULE: All guides, skills, and scripts go in the stow repo
 

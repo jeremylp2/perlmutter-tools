@@ -104,6 +104,12 @@ Note `annotation_version` from the API already has a leading `v` — don't add a
   ask the user to eyeball the browser, and tell them to hard-reload (track data is cached).
 
 ## Liftoff ("Mapped Models from X") tracks — refactored pipeline (2026-08)
+**⛔ liftoff writes `<target>.fa.mmi` AND pyfaidx `<genome>.fa.fai` (target and reference) NEXT TO THE INPUT FASTAs if they
+are missing — non-atomically.** Running many pairs in parallel against shared genome files races on them (2026-10-20: 14 pairs
+failed with "<genome>.fa.fai may not be writable"). Before ANY parallel liftoff run: build every genome's `.fai` and every
+target's `.mmi` (`minimap2 -d T.fa.mmi T.fa -a --end-bonus 5 --eqx -N 50 -p 0.5`, temp name then mv) with ONE process,
+verify all exist, and have the job script refuse to start if any is missing.
+
 Code: `/pscratch/sd/p/phillips/liftoff/` (scratch, not yet in git; old copies in
 `~/git/compgen/analysis/liftoff` use the obsolete tarball input).
 - WDL `liftoff_and_track.wdl` → `liftoff.wdl` + `makeLiftoffTrack.wdl`. Input `File target_tracklist`
