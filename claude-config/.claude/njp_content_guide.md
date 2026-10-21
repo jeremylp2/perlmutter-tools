@@ -37,6 +37,12 @@ Host: `plant-db-5.jgi.lbl.gov:3306`
 | 17 | inPress | Submitted / In Press Manuscripts | 12 |
 | 18 | relatedGenomes | Related Genomes | 14 |
 
+### ⛔ njp_content tables are MyISAM — NO transactions, ROLLBACK does nothing
+`viewProjectSection` (dev and prod) is ENGINE=MyISAM: every INSERT/UPDATE is written immediately; a "dry run" that inserts
+and then rolls back WRITES (2026-10-20: a dry run inserted the EucyPan project rows). Check the engine first
+(`information_schema.TABLES.ENGINE`). For a dry run, do NOT execute writes at all — validate inputs/guards only, then write
+once; verify by reading back afterwards.
+
 ### viewProjectSection — project-level content (shared across proteomes)
 - `id` (PK), `versionId`, `zome`, `vstId`, `sectionContentHtml`, `active`
 - Used for project-level content: portal home page sections, shared overviews, inPress items (e.g. SorghumPan, BrapaPan)
