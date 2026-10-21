@@ -53,6 +53,19 @@ Tear down with `ssh -O exit dori`.
   holds the per-browser JBPrivate `input.json` (the persistent record of each private
   browser's build inputs).
 
+## Knowledge dump + copies of keys/configs ON dori (for working from dori when Perlmutter is down)
+- Dump (mode 700): `/clusterfs/jgi/groups/science/wcplant/phillips/knowledge_dump_20261021/` — start with `00_README_INDEX.md`
+  (Pfam app, lakehouse access + data sources, metagenome sources, MERFS/numg, builds, bug log; `raw/` = memory, guides, transcripts).
+- **Credential/config copies (user-approved 2026-10-21):** `…/knowledge_dump_20261021/secrets/home/` mirrors Perlmutter `~/`
+  paths (dirs 700, files 600): `.kube/` (development.yaml = DEV cluster incl. the PROD Pfam app; spin-production.yaml = PROD cluster
+  incl. Pfam ES/proxy; k3s.yaml; zome-igb-2.yaml), `.ssh/` (dori, nersc, pzdeploy, wwwzome, zome-igb-1, id_* keys + certs, config),
+  `.starburst_jwt` + `.cf_access_token` (lakehouse), `.secrets/`, `.dremio_pat`, `.jamo/token`, `.pgpass`, `.confFile`, `.my.cnf`,
+  `.chadoconf*`, `.chado.conf*`, `.phytozome_dev_basicauth`, `.git-credentials`, `.netrc`, `.config/` (podman containers/auth.json,
+  rclone/rclone.conf), shell dotfiles. Use them by path (e.g. `KUBECONFIG=…/secrets/home/.kube/development.yaml`,
+  `ssh -i …/secrets/home/.ssh/<key>`); copy into dori `~` only if a tool insists on a home path, keeping 600/700. Never print them.
+- These are SNAPSHOTS: dori cert (~24 h), `.cf_access_token` (Cloudflare session) and `.starburst_jwt` (days) expire — refresh from
+  the user. Perlmutter `~` stays the source of truth.
+
 ## Gotchas
 - The SSH banner is verbose; filter it from command output.
 - The control socket is bound to one login node; if Claude's tool moves to a different login
