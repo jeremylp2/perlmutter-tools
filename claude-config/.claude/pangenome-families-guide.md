@@ -103,3 +103,21 @@ loaded, exported and wired into the site. Read with `phytozome-chado-guide.md`, 
   nodes x 120 workers did 87k families in 1.5 h; one output file per family, written .tmp then renamed.
 - API routes: /api/db/cluster/msa/<id>, /api/db/cluster/tree/<id>, /api/db/hmm/cluster/<id> (zome-webservices
   dbservices/api/swagger.yaml).
+
+## End-to-end setup order for a new pangenome (EucyPan 2026-10 run; status file per project in its scratch work dir)
+1. Families: decide grouping + PAV classes from the source (e.g. GENESPACE globHOG); map members to CHADO PAC ids per proteome.
+2. CHADO families: load_pan_families.py (dev rehearsal → prod, one transaction, --check-only first).
+3. Family MSAs/trees/HMMs: build per family (recipe above) → load_family_alignments.py (dev rehearsal → prod); check live API.
+4. Families-tab table: generate_family_table('<method>') in one guarded transaction (proven no-op DROP).
+5. Microsynteny: insert pac_synteny_view rows for the member proteomes (base tables; protein_family matview lacks new methods).
+6. Mongo family pages: export_family_records.py export (current set, provisional-defline fallback) → load NEW family_<method>.
+7. Genomes on the site: audit; restriction (CHADO + JAMO + njp_content + PMO check); BLAST DBs; Mongo genes_<pid> +
+   gene_mongo_load=2; deploy DB (clade, add proteomes, deploy_node chado_id = method, groupId '<pan>,standard');
+   regenerate njphytozome.json in a branch WORKTREE (never update_njphytozome.sh as-is), review diff; njphytozome.js
+   projectDetails + logo; commit/push only with user OK; manual frontend build; project page in njp_content.
+8. Browsers: build (mkjb/build_jbrowse.sh with an exporter that puts the class on mRNA lines), deploy to dna + fulldataset.json.
+9. Pan tracks per browser: PAV colouring (trackList keys + transcript style), pie VCF + tracks.conf stanza, HAP liftoff
+   "Mapped Models" tracks, pangenes track (liftoffs from all other members merged + jbname, flatfile-to-json --compress).
+   Heavy liftoff work on dori SLURM (right-sized; prebuild .fai/.mmi first). Watch dna inode quota.
+10. Production: only when the user says — prod deploy/njphytozome branch, IGB push (browsers + fulldataset), njp_content prod,
+    BioMart, prod frontend build.
