@@ -68,6 +68,16 @@ Twice. The user: "no simultaneous parallel writes to the same file. no more. non
   each exists, and make the parallel job script REFUSE to start if any is missing. (Alternative: each job reads its own
   private copy in its own directory.) "Each job writes only its own outputs" is NOT enough — check what the tools write
   beside their INPUTS.
+  **Same day, AGAIN, with a file NOT on the list:** liftoff (no `-db`) runs `gffutils.create_db(<gff>+"_db", force=True)`
+  beside the source GFF on EVERY run → 23 concurrent dori targets deleted/rebuilt each other's sqlite DBs → 172 pairs
+  crashed and every "successful" pair was suspect (also 465/521 Perlmutter pairs, incl. a LIVE track). A list of known
+  index types can never be complete. So, MANDATORY for every parallel run, no exceptions:
+  1. **Make shared input dirs READ-ONLY** (`chmod a-w <dir>` after inputs + prebuilt indexes are in place) and have the job
+     script refuse to start if any input dir is writable. A hidden writer then fails loudly on the first test instead of racing.
+  2. **The one-example test must snapshot every input dir (`ls -la --time-style=full-iso`) before and after** and show the
+     two listings are identical. Any new/changed file beside an input = a hidden writer → prebuild it or give each job a
+     private path (e.g. symlink the input into the job's own dir so `<input>+suffix` lands there).
+  3. Test with TWO concurrent jobs on the same inputs before the full fan-out — one job alone cannot show a race.
 
 ## ABSOLUTE RULE: All guides, skills, and scripts go in the stow repo
 
