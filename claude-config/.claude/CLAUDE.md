@@ -59,25 +59,28 @@ Twice. The user: "no simultaneous parallel writes to the same file. no more. non
   srun/job stdout; decisions (gates, counts, success checks) must never parse a merged multi-writer log.
 - Never replace, truncate, rename or rewrite a file another process has open or may write. Never "repair" a live file.
 - O_APPEND is NOT safe across NFS clients (GPFS/Lustre/VAST/CFS/pscratch). Treat any shared-file append as corruption.
-- Before launching ANY parallel job, list every file each process writes and prove each path has exactly one writer.
-- **⛔ Hidden writers: tools that lazily build an index NEXT TO A SHARED INPUT** — pyfaidx/`samtools faidx` `.fai`,
-  liftoff/minimap2 `.mmi`, tabix `.tbi`/`.csi`, `bwa`/`bowtie2` indexes, BLAST db files, `.gzi`. Several parallel jobs
-  reading the same FASTA each try to create the same index → race ("<x>.fa.fai may not be writable", truncated `.mmi`).
-  Hit repeatedly, again 2026-10-20 (EucyPan liftoff: 13 Perlmutter pairs + 1 dori pair failed on `<genome>.fa.fai`).
-  **Every time:** build every such index ONCE, by a single process, before any parallel run (temp name then rename), verify
-  each exists, and make the parallel job script REFUSE to start if any is missing. (Alternative: each job reads its own
-  private copy in its own directory.) "Each job writes only its own outputs" is NOT enough — check what the tools write
-  beside their INPUTS.
-  **Same day, AGAIN, with a file NOT on the list:** liftoff (no `-db`) runs `gffutils.create_db(<gff>+"_db", force=True)`
-  beside the source GFF on EVERY run → 23 concurrent dori targets deleted/rebuilt each other's sqlite DBs → 172 pairs
-  crashed and every "successful" pair was suspect (also 465/521 Perlmutter pairs, incl. a LIVE track). A list of known
-  index types can never be complete. So, MANDATORY for every parallel run, no exceptions:
-  1. **Make shared input dirs READ-ONLY** (`chmod a-w <dir>` after inputs + prebuilt indexes are in place) and have the job
-     script refuse to start if any input dir is writable. A hidden writer then fails loudly on the first test instead of racing.
-  2. **The one-example test must snapshot every input dir (`ls -la --time-style=full-iso`) before and after** and show the
-     two listings are identical. Any new/changed file beside an input = a hidden writer → prebuild it or give each job a
-     private path (e.g. symlink the input into the job's own dir so `<input>+suffix` lands there).
-  3. Test with TWO concurrent jobs on the same inputs before the full fan-out — one job alone cannot show a race.
+- **⛔ PRE-LAUNCH GATE for EVERY parallel run (any tool, any job, any file type, any cluster — no exceptions).** Before 2+
+  processes run at once (xargs -P, `&`, arrays, multiple sbatch/srun/salloc jobs, several screens, other clusters sharing a
+  filesystem), PROVE that no two of them can write the same path at the same time. "Each job writes its own outputs" is
+  NOT proof: tools also write beside their INPUTS, into the cwd, into shared caches/config/temp dirs, and they DELETE/rebuild
+  files with force. Lists of known culprits are never complete — the user (2026-10-20): "this is not specific to any single
+  file type or job … make absolutely sure that 2 or more of them won't all write to the same file at the same time."
+  The gate, every time, in this order:
+  1. **Write down every path each process can write** — named outputs, logs, temp/cwd files, AND every shared input it
+     reads (anything shared is a candidate hidden-writer target). Give every process its own output dir and its own cwd.
+  2. **Lock shared inputs: `chmod a-w` every shared input dir/file** once inputs (and any prebuilt side files) are in place;
+     the job script REFUSES to start if any shared input is writable. Unexpected writers then fail loudly instead of racing.
+  3. **One-example test with before/after snapshots** of every directory the job reads or writes outside its own private dir
+     (`ls -la --time-style=full-iso`, recursive only within that bounded dir). Listings must be identical. ANY new/changed/
+     deleted file outside the job's own dir = a writer you missed → prebuild it ONCE by a single process (temp name, then
+     rename; verify), or give each job a private path (symlink/copy the input into the job's own dir so side files land there).
+  4. **Two-process concurrency test on the SAME shared inputs** before the full fan-out — a single job can never reveal a race.
+     Check both outputs and repeat the snapshot diff.
+  5. Only then fan out. If anything shared could still be written, STOP and fix the design — never "it'll probably be fine".
+  Known examples (NOT a complete list): `.fai`/`.gzi` (pyfaidx/samtools), `.mmi` (minimap2/liftoff), `.tbi`/`.csi` (tabix),
+  bwa/bowtie2/BLAST indexes, liftoff's `gffutils.create_db(<gff>+"_db", force=True)` beside the source GFF.
+  History: 2026-10-20 EucyPan liftoff hit this TWICE in one day — `.fai` race (14 pairs failed), then the gff `_db` race
+  (172 dori pairs crashed; 465/521 Perlmutter pairs exposed, incl. a LIVE browser track) — after a rule naming only `.fai`.
 
 ## ABSOLUTE RULE: All guides, skills, and scripts go in the stow repo
 
