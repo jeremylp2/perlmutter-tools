@@ -26,6 +26,14 @@ Started 2026-10-28. Dev only for now. Work dir (ad hoc inventory): `$SCRATCH/dl_
   proteome: PACProteome:<pid> → its peptide_collection feature → organism_id
   (`$SCRATCH/dl_tool/sql/taxid_by_proteome.sql`).
 - 95 legacy-only `gene_exon.gff3.gz` files are renamed `gene_exons.gff3.gz` in downloads.
+- One-per-taxid tier is grouped by the NCBI **species** ancestor of each proteome's CHADO taxid (CHADO mixes ranks:
+  11 of 199 taxids are subspecies/varietas/strain/isolate/no rank; brapapan members split 3711 vs 1813537).
+  NCBI efetch `$SCRATCH/dl_tool/ncbi_taxa.xml`; map `species_by_proteome.tsv`. CHADO 337451 (531 Cinnamomum
+  kanehirae) is now an NCBI alias of 337465 Camphora micrantha (reported to user; CHADO not changed).
+- Representative choice: a pangenome's designated reference (CHADO grp type `pangenome`, grpmemberprop
+  `pangenome_reference=1`) wins; a hap-resolved genome always comes with its pair (grp type `organism_haplotype`,
+  83 groups, all 2 members); otherwise user picks (draft rule: plain "Genus species" name, newest id).
+  Draft: `$SCRATCH/dl_tool/taxid_reps_draft.tsv` (196 species, 216 proteomes).
 
 ## Inventory (ad hoc, read-only) — `$SCRATCH/dl_tool/inventory_canonical.py`
 Rules from pz_file_export regen_v2_http.py + regen_strict.py (strict '14' tag, display_location, canonical suffix
