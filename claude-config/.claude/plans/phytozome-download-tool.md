@@ -105,7 +105,12 @@ verified against JAMO md5 after copying.
   `$SCRATCH/dl_tool/zc/deploy_swap.sh`, build `$SCRATCH/dl_tool/zc/build_dev_frozen.sh` (frozen DOCUMENTATION_MANIFEST).
 - Proxy: zome-proxy rev 5 = live e01dfec + downloads.loc (zome-helm-charts branch `downloads-route`, uncommitted);
   template_config dev-plant __PROXY_ADDITIONAL_LOCATIONS__ -> row 1324 (1300 unlinked).
-- Not done: commits (none without user say-so); helm chart for zome-downloads; OpenAPI examples from real responses.
+- Pushed 2026-10-29 (user: "commit locally on a branch and push on a branch"; no MRs): zome-webservices
+  `downloads-tool` 4d81122, zome-clientside `downloads-page` e20a3f0e, zome-helm-charts `downloads-route` fe84620.
+- Later UI changes (same day): tab "Whole Nodes" first; green "Select file type" (default Gene models with exons;
+  names the type when one); (i) buttons per type; formats in type labels (FASTA/GFF3/TSV/XML/text/HTML);
+  "Chosen genomes" panel; "Other Pangenomes"; email/README counts+sizes via lib/format.js.
+- Not done: helm chart for zome-downloads (dev runs from deploy_test via kubectl); OpenAPI examples from real responses.
 
 ## Existing pieces
 - `www/phytozome_bundle.tar` (127 GB, 2026-03-10): NOT used by the tool; leave it alone (user 2026-10-28).
