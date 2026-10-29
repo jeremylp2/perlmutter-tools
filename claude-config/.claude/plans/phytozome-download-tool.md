@@ -88,6 +88,25 @@ verified against JAMO md5 after copying.
 - Open: mail mechanism; helm chart + template_config + proxy `/downloads` route; clientside `/downloads` page;
   OpenAPI examples from real responses (by script).
 
+## State 2026-10-29 00:05 (live on SPIN dev)
+- Page https://phytozome-dev.jgi.doe.gov/downloads (zome-clientside branch `downloads-page`, uncommitted; built with
+  Node 14 locally, build-only), tabs: **Premade** (first/default: set toggle All genomes / One per Phytozome organism
+  (strain) / One per NCBI taxid; "All of Phytozome"; tree with connector lines; one "Download tarball" per node) and
+  **Choose genomes and files** (site CheckboxTree, ID lozenges, file types, "Download tarball now" + "Email me a link").
+- User decisions: ONLY tarball links (no scripts/TSV); tarballs streamed on download (no stored premade tarballs);
+  no policy-acceptance checkbox/flag, just a "please read and follow" notice; restricted genomes without a policy
+  file ship without one; nothing held back.
+- Service zome-downloads-dev (plain kubectl, `deploy_test/zome-downloads-dev.yaml`), catalog
+  `pzpipelines/zome_downloads/data/catalog.json` (sets all / one-per-organism / one-per-ncbi-taxid), mail via
+  smtp.lbl.gov (tls servername smtp-relay.gmail.com) from phytozome@lbl.gov; test mail sent to the user 10-29.
+- Staged files: www/phytozome_bundle, 8,510 files, all md5 == JAMO (19 March-bundle gene_exons differed only in gzip
+  mtime -> replaced with JAMO copies). Frozen dev build backed up:
+  `pzpipelines/zome_clientside_backups/frozen_bd562754_20261027/` (byte-identical repro proven). Deploy tool
+  `$SCRATCH/dl_tool/zc/deploy_swap.sh`, build `$SCRATCH/dl_tool/zc/build_dev_frozen.sh` (frozen DOCUMENTATION_MANIFEST).
+- Proxy: zome-proxy rev 5 = live e01dfec + downloads.loc (zome-helm-charts branch `downloads-route`, uncommitted);
+  template_config dev-plant __PROXY_ADDITIONAL_LOCATIONS__ -> row 1324 (1300 unlinked).
+- Not done: commits (none without user say-so); helm chart for zome-downloads; OpenAPI examples from real responses.
+
 ## Existing pieces
 - `www/phytozome_bundle.tar` (127 GB, 2026-03-10): NOT used by the tool; leave it alone (user 2026-10-28).
 - Truncated 924 assembly (91,602,944 bytes, `gzip -t` fails) deleted from www and phillips bundles 2026-10-28
