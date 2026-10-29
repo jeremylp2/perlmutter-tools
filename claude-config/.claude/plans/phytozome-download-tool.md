@@ -19,6 +19,13 @@ Started 2026-10-28. Dev only for now. Work dir (ad hoc inventory): `$SCRATCH/dl_
 - Include unrestricted + restricted (with DataReleasePolicy.html bundled); exclude embargoed (930, 931).
 - UI: in zome-clientside, like the dashboard (route + scss scoped under a page class, real Chrome top bar).
   **No clientside builder exists anymore → local builds.** Node **22.23.4** only (security-patched) anywhere.
+- A reasonably human-friendly API alongside the UI (user): readable resource names (tree nodes by name, proteomes
+  by id or shortName, file types by plain names), plain JSON, documented (OpenAPI like the dashboard's
+  `/dashboard/api/docs/`), same endpoints the page uses.
+- Taxid source for the one-per-taxid tier = CHADO organism (`organism_dbxref`, db `Taxonomy`), reached per
+  proteome: PACProteome:<pid> → its peptide_collection feature → organism_id
+  (`$SCRATCH/dl_tool/sql/taxid_by_proteome.sql`).
+- 95 legacy-only `gene_exon.gff3.gz` files are renamed `gene_exons.gff3.gz` in downloads.
 
 ## Inventory (ad hoc, read-only) — `$SCRATCH/dl_tool/inventory_canonical.py`
 Rules from pz_file_export regen_v2_http.py + regen_strict.py (strict '14' tag, display_location, canonical suffix
