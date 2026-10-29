@@ -26,6 +26,18 @@ allowlist, rename-aware dedup). Run 2026-10-28 on prod tree: 469 proteomes, 8,91
 RESTORED 8,539 (410.2 GB), BACKUP_COMPLETE 204 (15.2 GB), RESTORE_REGISTERED 164 (29.3 GB), PURGED 5 (proteome 500
 P14 files + policy). Output `inv_full.json`, classified `inv_full_cls.json`.
 
+## Custom tarballs (user, 2026-10-28)
+Temporary: the user gets at most 24 h to download; sweep at least daily. If CFS space is short they go on a
+SPIN PV instead.
+
+## Selection rules (user, 2026-10-28) — `$SCRATCH/dl_tool/select_canonical.py` → selected.json, dropped.tsv
+- Version rule (tree assembly_version / displayVersion in `_<pid>_<version>`); if several match, version followed
+  directly by the type suffix (833 → the 2022 Zm-B73-REFERENCE-NAM-5.0 files).
+- Ambiguous repeatmasked gff3 → newest file. lowConfidence → not a standard type, dropped.
+- gene_exon vs gene_exons → canonical spelling gene_exons; legacy-only gene_exon files (95) are renamed to
+  gene_exons in the downloads (`dl_name`). Readmes: assembly + annotation both kept.
+- Result: 8,912 → 8,510 files (406.3 GB), 469 proteomes, 0 unresolved, no (proteome,type) lost.
+
 ## Open — need user decisions
 1. **One file per type per proteome.** JAMO's displayed v14 set has >1 file of a type for many proteomes (legacy
    names, v1.0+v1.1 assemblies, stray files like `Esalsugineum_173_v1.fa.gz` under 173). Proposed rule: match
