@@ -70,6 +70,11 @@ SPIN PV instead.
    with CFS mount writing `www/.../custom/<token>.tar`, email sender, expiry cleanup. Need: how mail is sent,
    whether wwwzome (58058) can write the CFS www target.
 
+## Manifests (user 2026-10-28)
+Every manifest row carries the file's **JAMO id**. Columns: proteome_id, species, strain, file type, file
+name, size, md5 (JAMO md5sum, `$SCRATCH/dl_tool/selected_md5.json`: 8,510/8,510), jamo_id, URL. Staged files are
+verified against JAMO md5 after copying.
+
 ## Existing pieces
 - `www/phytozome_bundle.tar` (127 GB, 2026-03-10): NOT used by the tool; leave it alone (user 2026-10-28).
 - Truncated 924 assembly (91,602,944 bytes, `gzip -t` fails) deleted from www and phillips bundles 2026-10-28
