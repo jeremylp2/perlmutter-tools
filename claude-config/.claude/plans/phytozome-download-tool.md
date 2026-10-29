@@ -112,6 +112,17 @@ verified against JAMO md5 after copying.
   "Chosen genomes" panel; "Other Pangenomes"; email/README counts+sizes via lib/format.js.
 - Not done: helm chart for zome-downloads (dev runs from deploy_test via kubectl); OpenAPI examples from real responses.
 
+## EucyPan / dev tree (2026-10-29, user: option 1 = not public)
+- Dev catalog is built from the DEV tree (zome-clientside trunk njphytozome.json, deploy_tag phytozome-next_20260904):
+  517 genomes = prod 469 + EucyPan 995-1042 (all Eucalyptus grandis 71139, unrestricted, 17 files each, 816 files,
+  30.2 GB, md5 == JAMO). Their files are staged NOT web-served in
+  `pzpipelines/zome_downloads/bundle_dev/` (mounted /bundle_private; catalog "bundle": "private", url null); the
+  portal URL of such a file is 404. EucyPan node: 50 members (CHADO), one-per-ncbi-taxid = 993+994.
+- Merged inputs: `$SCRATCH/dl_tool/selected_all_md5.json`, `species_by_proteome_all.tsv`, `strain_reps_all.tsv`;
+  `classify_inventory.py` (verified identical to the original classes on 8,912 files).
+- Fix 2026-10-29: a restricted genome's policy is added only when that genome contributes a chosen file
+  (lib/catalog.js files()); page counts "N of M genomes", "no files of the chosen types".
+
 ## Existing pieces
 - `www/phytozome_bundle.tar` (127 GB, 2026-03-10): NOT used by the tool; leave it alone (user 2026-10-28).
 - Truncated 924 assembly (91,602,944 bytes, `gzip -t` fails) deleted from www and phillips bundles 2026-10-28
