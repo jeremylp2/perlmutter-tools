@@ -75,6 +75,19 @@ Every manifest row carries the file's **JAMO id**. Columns: proteome_id, species
 name, size, md5 (JAMO md5sum, `$SCRATCH/dl_tool/selected_md5.json`: 8,510/8,510), jamo_id, URL. Staged files are
 verified against JAMO md5 after copying.
 
+## Code + dev test (2026-10-28)
+- zome-webservices branch `downloads-tool` (local, uncommitted), worktree on CFS
+  `/global/cfs/cdirs/plantbox/pzpipelines/zome_downloads/src/zome-webservices-downloads` (`downloads/`: server.js,
+  lib/{catalog,requests,mail}.js, api/openapi.json, build/build_catalog.py, Dockerfile pinned node 22.23.4 digest
+  sha256:63538dfe…3384). node_modules installed with node v22.23.4.
+- SPIN dev test (ns plant, plain kubectl, not helm): `pzpipelines/zome_downloads/deploy_test/zome-downloads-dev.yaml`
+  = PVC zome-downloads-custom (nfs-client-vast) + ConfigMap + Deployment zome-downloads-dev (node image by digest,
+  code/catalog/bundle hostPath read-only, uid 58058) + Service :8103. No proxy route yet; test via
+  `kubectl port-forward svc/zome-downloads-dev 18103:8103`. Test catalog: `pzpipelines/zome_downloads/data_test/`.
+  Mail mode log (nothing sent). Custom request 447+1062 built, downloaded, md5s = JAMO.
+- Open: mail mechanism; helm chart + template_config + proxy `/downloads` route; clientside `/downloads` page;
+  OpenAPI examples from real responses (by script).
+
 ## Existing pieces
 - `www/phytozome_bundle.tar` (127 GB, 2026-03-10): NOT used by the tool; leave it alone (user 2026-10-28).
 - Truncated 924 assembly (91,602,944 bytes, `gzip -t` fails) deleted from www and phillips bundles 2026-10-28
