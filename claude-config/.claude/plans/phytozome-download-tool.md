@@ -71,6 +71,11 @@ SPIN PV instead.
    whether wwwzome (58058) can write the CFS www target.
 
 ## Existing pieces
+- `www/phytozome_bundle.tar` (127 GB, 2026-03-10): NOT used by the tool; leave it alone (user 2026-10-28).
+- Truncated 924 assembly (91,602,944 bytes, `gzip -t` fails) deleted from www and phillips bundles 2026-10-28
+  (user); the full JAMO file (995,452,143 bytes) is copied into www by the staging run.
+- 55 bundle files whose size differed from JAMO (54 gene_exons: source column phytozomev13 vs v14) are
+  replaced with the JAMO versions (user: "if in doubt, jamo version").
 - `plantbox/phillips/phytozome_bundle` + `plantbox/www/phytozome_bundle` (+127 GB `.tar`): only primary assembly
   + gene_exons for 447 proteomes. pscratch copy is empty dirs.
 - `~/git/compgen/JAMO/fetchPhytozomeBundle.py` (untracked): `jamo fetch` + copy logic; contains an inline DB
